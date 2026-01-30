@@ -30,8 +30,8 @@ const App: React.FC = () => {
   useEffect(() => {
     // Initial Auth Check
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (session && !error) {
         setIsLoggedIn(true);
         const name = session.user.user_metadata?.shop_name || "আমার খাতা";
         setShopName(name);
@@ -78,7 +78,6 @@ const App: React.FC = () => {
     } catch (error) {
       setSyncMessage("অফলাইন মোড 📁");
     } finally {
-      setLoading(false);
       setSyncing(false);
       setTimeout(() => setSyncMessage(null), 3000);
     }
@@ -92,6 +91,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     if (confirm("আপনি কি নিশ্চিতভাবে লগ আউট করতে চান?")) {
       await supabase.auth.signOut();
+      localStorage.removeItem('supabase.auth.token'); // Force clear any stale tokens
       setIsLoggedIn(false);
     }
   };
@@ -192,8 +192,9 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-12 h-12 border-4 border-[#0f172a] border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <div className="w-16 h-16 border-4 border-[#0f172a] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-[#0f172a] font-black text-lg animate-pulse">লোড হচ্ছে...</p>
       </div>
     );
   }
@@ -237,8 +238,9 @@ const App: React.FC = () => {
       />
 
       {syncMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-slate-800 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-slate-700 flex items-center gap-2">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-[#0f172a] text-white px-6 py-3 rounded-full text-xs font-black shadow-2xl border border-white/10 flex items-center gap-2">
+            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
             {syncMessage}
           </div>
         </div>
@@ -257,18 +259,18 @@ const App: React.FC = () => {
              placeholder="নাম দিয়ে কাস্টমার খুঁজুন..."
              value={searchQuery}
              onChange={(e) => setSearchQuery(e.target.value)}
-             className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:outline-none transition-all font-medium text-sm"
+             className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-[#0f172a] focus:outline-none transition-all font-bold text-sm"
            />
          </div>
       </div>
 
-      <div className="mt-6 space-y-3 pb-28">
+      <div className="mt-6 space-y-3 pb-32">
         {customers.length === 0 ? (
-          <div className="py-12 text-center bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+          <div className="py-16 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+            <div className="w-20 h-20 bg-white rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-sm">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <p className="text-slate-400 font-bold">কোনো হিসাব পাওয়া যায়নি</p>
+            <p className="text-slate-400 font-black">কোনো হিসাব পাওয়া যায়নি</p>
           </div>
         ) : (
           customers.map(customer => (
@@ -285,9 +287,9 @@ const App: React.FC = () => {
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-50">
         <button 
           onClick={() => setIsManualAddOpen(true)}
-          className="w-full bg-[#0f172a] hover:bg-[#1e293b] text-white py-5 rounded-[2.5rem] font-black text-xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all border-4 border-white"
+          className="w-full bg-[#0f172a] hover:bg-slate-800 text-white py-6 rounded-[2.5rem] font-black text-xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all border-4 border-white"
         >
-          <div className="bg-white/20 p-1.5 rounded-xl">
+          <div className="bg-white/20 p-2 rounded-xl">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
           </div>
           নতুন হিসাব যোগ করুন
