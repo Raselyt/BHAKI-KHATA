@@ -9,12 +9,6 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, onSyncClick, onLogout, username }) => {
-  const handleSelectKey = async () => {
-    if (window.aistudio && window.aistudio.openSelectKey) {
-      await window.aistudio.openSelectKey();
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col max-w-2xl mx-auto bg-white shadow-xl relative">
       <header className="bg-emerald-600 text-white p-4 sticky top-0 z-[50] flex justify-between items-center shadow-md">
@@ -36,7 +30,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSyncClick, onLogout,
             <button 
               onClick={onSyncClick}
               className="bg-emerald-500 hover:bg-emerald-400 p-2.5 rounded-2xl transition-all active:scale-95"
-              title="ডিভাইস সিংকিং"
+              title="রিফ্রেশ করুন"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6"/><path d="m18 13 3-3-3-3"/><path d="M21 10H10"/></svg>
             </button>
@@ -50,13 +44,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSyncClick, onLogout,
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           )}
-          <button 
-            onClick={handleSelectKey}
-            className="bg-emerald-500 hover:bg-emerald-400 p-2.5 rounded-2xl transition-all active:scale-95"
-            title="AI কানেক্ট করুন"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3m-3-3l-2.5-2.5"/></svg>
-          </button>
         </div>
       </header>
       <main className="flex-1 overflow-y-auto p-4 pb-24">

@@ -4,14 +4,9 @@ import { Transaction } from "../types.ts";
 
 // Helper function for transaction parsing using Gemini
 export const parseTransactionPrompt = async (userInput: string) => {
-  // Use window.process safely for browser environments
-  const apiKey = (window as any).process?.env?.API_KEY || "";
-  if (!apiKey) {
-    console.error("AI API Key not found");
-    return null;
-  }
-  
-  const ai = new GoogleGenAI({ apiKey });
+  // Always create a new instance right before making an API call to ensure the latest API key is used.
+  // The API key is obtained exclusively from process.env.API_KEY as per guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -43,6 +38,7 @@ export const parseTransactionPrompt = async (userInput: string) => {
   });
 
   try {
+    // Access response.text property directly as it returns the string output.
     const jsonStr = response.text?.trim() || "{}";
     return JSON.parse(jsonStr);
   } catch (e) {
@@ -53,10 +49,8 @@ export const parseTransactionPrompt = async (userInput: string) => {
 
 // Helper function to get AI-driven financial advice
 export const getFinancialAdvice = async (transactions: Transaction[]) => {
-  const apiKey = (window as any).process?.env?.API_KEY || "";
-  if (!apiKey) return "AI কানেক্ট করা নেই।";
-  
-  const ai = new GoogleGenAI({ apiKey });
+  // Always create a new instance right before making an API call.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const summary = JSON.stringify(transactions.slice(0, 20));
   
   const response = await ai.models.generateContent({
@@ -67,5 +61,6 @@ export const getFinancialAdvice = async (transactions: Transaction[]) => {
     }
   });
 
+  // Access response.text property directly.
   return response.text;
 };

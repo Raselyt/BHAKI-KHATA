@@ -8,46 +8,64 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
-      // Browser safety: defines process.env to prevent ReferenceError crashes
-      window.process = { env: { API_KEY: "" } };
+      // Polyfill for process and global to prevent library crashes
+      window.process = { env: { NODE_ENV: 'production', API_KEY: '' } };
+      window.global = window;
+      
+      // Error logger to catch and show startup errors
+      window.addEventListener('error', function(event) {
+        const errorDiv = document.getElementById('error-display');
+        if (errorDiv) {
+          errorDiv.style.display = 'block';
+          errorDiv.innerHTML = `
+            <div style="background: #fee2e2; border: 2px solid #ef4444; padding: 15px; border-radius: 12px; margin-top: 20px; font-family: monospace; font-size: 12px; color: #b91c1c; text-align: left;">
+              <strong>Error:</strong> ${event.message}<br>
+              <strong>File:</strong> ${event.filename?.split('/').pop()}<br>
+              <button onclick="location.reload()" style="display: block; margin-top: 10px; background: #ef4444; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold;">পুনরায় লোড করুন</button>
+            </div>
+          `;
+        }
+      });
     </script>
-    <style>
-        body {
-            font-family: 'Hind Siliguri', sans-serif;
-            background-color: #f8fafc;
-        }
-        /* Loading spinner animation */
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #059669;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
 <script type="importmap">
 {
   "imports": {
     "@google/genai": "https://esm.sh/@google/genai@^1.36.0",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1"
+    "react": "https://esm.sh/react@19.0.0",
+    "react/": "https://esm.sh/react@19.0.0/",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
   }
 }
 </script>
+    <style>
+        body {
+            font-family: 'Hind Siliguri', sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #059669;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
 <body>
     <div id="root">
-        <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px;">
+        <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center;">
             <div class="spinner"></div>
-            <p style="font-family: sans-serif; color: #64748b; font-weight: bold;">অ্যাপটি লোড হচ্ছে...</p>
+            <p style="font-family: sans-serif; color: #64748b; font-weight: bold; margin-top: 20px;">অ্যাপটি লোড হচ্ছে...</p>
+            <div id="error-display" style="display: none; width: 100%; max-width: 400px;"></div>
         </div>
     </div>
+    <!-- This is the most important part: loading the main file -->
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>
