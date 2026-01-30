@@ -9,38 +9,41 @@ interface DashboardStatsProps {
 export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
   return (
     <div className="grid grid-cols-2 gap-4 mb-8">
-      {/* Primary Remaining Balance Card */}
-      <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-6 rounded-[2rem] shadow-xl shadow-indigo-100 col-span-2 relative overflow-hidden group">
-        <div className="relative z-10 flex justify-between items-center text-white">
-          <div>
-            <p className="text-[10px] text-indigo-100 font-black mb-1 uppercase tracking-widest opacity-80">বর্তমানে মোট পাওনা আছে</p>
-            <p className="text-4xl font-black tracking-tight">৳ {stats.totalRemaining.toLocaleString()}</p>
-          </div>
-          <div className="bg-white/20 p-4 rounded-3xl backdrop-blur-md transform group-hover:rotate-12 transition-transform duration-500">
-             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      {/* Primary Remaining Balance Card - Luxury Look */}
+      <div className="bg-gradient-to-br from-[#4f46e5] via-[#4338ca] to-[#3730a3] p-7 rounded-[2.5rem] shadow-[0_20px_40px_rgba(79,70,229,0.25)] col-span-2 relative overflow-hidden group">
+        <div className="relative z-10 text-white">
+          <p className="text-[10px] text-indigo-100 font-black mb-1 uppercase tracking-[0.2em] opacity-80">বর্তমানে মোট পাওনা আছে</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black">৳</span>
+            <span className="text-5xl font-black tracking-tighter leading-tight">
+              {stats.totalRemaining.toLocaleString()}
+            </span>
           </div>
         </div>
-        {/* Decorative elements */}
-        <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
-        <div className="absolute -left-8 -top-8 w-24 h-24 bg-indigo-400/20 rounded-full blur-2xl"></div>
+        
+        {/* Abstract Background Decoration */}
+        <div className="absolute top-0 right-0 p-8 opacity-20 group-hover:rotate-12 transition-transform duration-700">
+           <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
+        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
       </div>
 
       {/* Total Given Card */}
-      <div className="bg-rose-50 p-5 rounded-[2rem] border-2 border-rose-100 col-span-1 group hover:bg-rose-100 transition-colors">
+      <div className="bg-[#fff1f2] p-6 rounded-[2.2rem] border border-rose-100 col-span-1 shadow-sm hover:shadow-md transition-all active:scale-95 cursor-default">
         <div className="flex items-center gap-2 mb-2">
-           <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+           <div className="w-2 h-2 rounded-full bg-rose-500"></div>
            <p className="text-[10px] text-rose-600 font-black uppercase tracking-widest">মোট বাকি দিয়েছি</p>
         </div>
-        <p className="text-2xl font-black text-rose-700">৳ {stats.totalGiven.toLocaleString()}</p>
+        <p className="text-2xl font-black text-rose-700 leading-none">৳ {stats.totalGiven.toLocaleString()}</p>
       </div>
 
       {/* Total Received Card */}
-      <div className="bg-emerald-50 p-5 rounded-[2rem] border-2 border-emerald-100 col-span-1 group hover:bg-emerald-100 transition-colors">
+      <div className="bg-[#f0fdf4] p-6 rounded-[2.2rem] border border-emerald-100 col-span-1 shadow-sm hover:shadow-md transition-all active:scale-95 cursor-default">
         <div className="flex items-center gap-2 mb-2">
-           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+           <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">মোট ফেরত পেয়েছি</p>
         </div>
-        <p className="text-2xl font-black text-emerald-700">৳ {stats.totalReceived.toLocaleString()}</p>
+        <p className="text-2xl font-black text-emerald-700 leading-none">৳ {stats.totalReceived.toLocaleString()}</p>
       </div>
     </div>
   );

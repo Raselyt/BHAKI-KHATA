@@ -28,25 +28,21 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    // Initial Auth Check
     const checkAuth = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (session && !error) {
         setIsLoggedIn(true);
-        const name = session.user.user_metadata?.shop_name || "আমার খাতা";
-        setShopName(name);
+        setShopName(session.user.user_metadata?.shop_name || "আমার খাতা");
       }
       setLoading(false);
     };
 
     checkAuth();
 
-    // Listen for Auth Changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setIsLoggedIn(true);
-        const name = session.user.user_metadata?.shop_name || "আমার খাতা";
-        setShopName(name);
+        setShopName(session.user.user_metadata?.shop_name || "আমার খাতা");
       } else {
         setIsLoggedIn(false);
       }
@@ -91,8 +87,8 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     if (confirm("আপনি কি নিশ্চিতভাবে লগ আউট করতে চান?")) {
       await supabase.auth.signOut();
-      localStorage.removeItem('supabase.auth.token'); // Force clear any stale tokens
-      setIsLoggedIn(false);
+      localStorage.clear(); // Complete cleanup
+      window.location.reload(); // Hard refresh to clear all states
     }
   };
 
@@ -115,7 +111,6 @@ const App: React.FC = () => {
       setCustomerPhones(phones);
       localStorage.setItem('transactions', JSON.stringify(finalTransactions));
       localStorage.setItem('customerPhones', JSON.stringify(phones));
-
       setSyncMessage("ডেটা ইম্পোর্ট সফল ✅");
     } catch (error) {
       alert("ডেটা ইম্পোর্ট করতে সমস্যা হয়েছে।");
@@ -238,7 +233,7 @@ const App: React.FC = () => {
       />
 
       {syncMessage && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[150] animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="bg-[#0f172a] text-white px-6 py-3 rounded-full text-xs font-black shadow-2xl border border-white/10 flex items-center gap-2">
             <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
             {syncMessage}
@@ -249,28 +244,29 @@ const App: React.FC = () => {
       <DashboardStats stats={stats} />
       <SmartAddInput onParsed={handleAddTransaction} />
 
-      <div className="sticky top-[72px] bg-white z-40 py-2">
+      <div className="sticky top-[72px] bg-white/90 backdrop-blur-md z-40 py-2 border-b border-slate-50">
          <div className="relative">
-           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+           <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
            </div>
            <input 
              type="text"
              placeholder="নাম দিয়ে কাস্টমার খুঁজুন..."
              value={searchQuery}
              onChange={(e) => setSearchQuery(e.target.value)}
-             className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-[#0f172a] focus:outline-none transition-all font-bold text-sm"
+             className="w-full p-5 pl-12 bg-slate-50 border-2 border-slate-100 rounded-[2rem] focus:border-[#0f172a] focus:bg-white focus:outline-none transition-all font-bold text-sm"
            />
          </div>
       </div>
 
-      <div className="mt-6 space-y-3 pb-32">
+      <div className="mt-6 space-y-4 pb-40">
         {customers.length === 0 ? (
-          <div className="py-16 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-            <div className="w-20 h-20 bg-white rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <div className="py-20 text-center bg-slate-50 rounded-[3.5rem] border-2 border-dashed border-slate-200">
+            <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center mx-auto mb-5 shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <p className="text-slate-400 font-black">কোনো হিসাব পাওয়া যায়নি</p>
+            <h3 className="text-slate-500 font-black text-lg mb-1">কোনো হিসাব পাওয়া যায়নি</h3>
+            <p className="text-slate-400 text-sm font-bold">নতুন কাষ্টমার যোগ করতে নিচের বাটন ব্যবহার করুন</p>
           </div>
         ) : (
           customers.map(customer => (
@@ -283,16 +279,21 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Persistent Add Button at Bottom */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-50">
+      {/* Modern Floating Action Bar */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-[100] animate-in slide-in-from-bottom-10 duration-500 delay-300">
         <button 
           onClick={() => setIsManualAddOpen(true)}
-          className="w-full bg-[#0f172a] hover:bg-slate-800 text-white py-6 rounded-[2.5rem] font-black text-xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all border-4 border-white"
+          className="w-full bg-[#0f172a] text-white p-2 rounded-[2.5rem] shadow-[0_20px_40px_rgba(15,23,42,0.3)] flex items-center justify-between group active:scale-[0.97] transition-all border-2 border-white/5"
         >
-          <div className="bg-white/20 p-2 rounded-xl">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          <div className="flex items-center gap-4 pl-4">
+            <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center group-hover:rotate-90 transition-transform duration-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            </div>
+            <span className="font-black text-lg tracking-tight">নতুন হিসাব যোগ করুন</span>
           </div>
-          নতুন হিসাব যোগ করুন
+          <div className="bg-emerald-500 w-12 h-12 rounded-full flex items-center justify-center shadow-lg mr-1">
+             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
         </button>
       </div>
     </Layout>
