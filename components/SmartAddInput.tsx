@@ -4,7 +4,7 @@ import { parseTransactionPrompt } from '../services/geminiService';
 import { TransactionType } from '../types';
 
 interface SmartAddInputProps {
-  onParsed: (data: { name: string; amount: number; type: TransactionType }) => void;
+  onParsed: (data: { name: string; amount: number; type: TransactionType; note?: string }) => void;
 }
 
 export const SmartAddInput: React.FC<SmartAddInputProps> = ({ onParsed }) => {
@@ -20,11 +20,12 @@ export const SmartAddInput: React.FC<SmartAddInputProps> = ({ onParsed }) => {
         onParsed({
           name: result.name,
           amount: result.amount,
-          type: result.type as TransactionType
+          type: result.type as TransactionType,
+          note: result.note
         });
         setInput('');
       } else {
-        alert("দুঃখিত, আমি বুঝতে পারিনি। দয়া করে স্পষ্ট করে লিখুন (যেমন: রহিম ২০০ টাকা বাকি)");
+        alert("দুঃখিত, আমি বুঝতে পারিনি। দয়া করে স্পষ্ট করে লিখুন (যেমন: রহিম ২০০ টাকা ফটোকপি বাকি)");
       }
     } catch (error) {
       alert("AI লোড হতে সমস্যা হচ্ছে। সাধারণ উপায়ে যোগ করুন।");
@@ -36,7 +37,7 @@ export const SmartAddInput: React.FC<SmartAddInputProps> = ({ onParsed }) => {
   return (
     <div className="bg-emerald-50 p-4 rounded-xl mb-6 border border-emerald-100 shadow-inner">
       <p className="text-xs font-semibold text-emerald-700 mb-2 uppercase flex items-center gap-1">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1-1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
         ম্যাজিক ইনপুট (বলেও লিখতে পারেন)
       </p>
       <div className="flex gap-2">
@@ -44,7 +45,7 @@ export const SmartAddInput: React.FC<SmartAddInputProps> = ({ onParsed }) => {
           type="text" 
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="যেমন: রহিম ৫০০ টাকা বিকাশ বাকি..."
+          placeholder="যেমন: রহিম ৫০০ টাকা ফটোকপি বাকি..."
           className="flex-1 p-2 rounded-lg border border-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
           onKeyPress={(e) => e.key === 'Enter' && handleSmartAdd()}
         />

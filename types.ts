@@ -6,6 +6,12 @@ export enum TransactionType {
   CASH_PAYMENT = 'নগদ পরিশোধ'
 }
 
+export interface User {
+  id: string;
+  username: string;
+  passwordHash: string;
+}
+
 export interface Transaction {
   id: string;
   name: string;

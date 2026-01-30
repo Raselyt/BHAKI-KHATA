@@ -14,7 +14,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
         <div className="relative z-10 flex justify-between items-center text-white">
           <div>
             <p className="text-[10px] text-indigo-100 font-black mb-1 uppercase tracking-widest opacity-80">বর্তমানে মোট পাওনা আছে</p>
-            <p className="text-4xl font-black tracking-tight">€ {stats.totalRemaining.toLocaleString()}</p>
+            <p className="text-4xl font-black tracking-tight">৳ {stats.totalRemaining.toLocaleString()}</p>
           </div>
           <div className="bg-white/20 p-4 rounded-3xl backdrop-blur-md transform group-hover:rotate-12 transition-transform duration-500">
              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -31,7 +31,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
            <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
            <p className="text-[10px] text-rose-600 font-black uppercase tracking-widest">মোট বাকি দিয়েছি</p>
         </div>
-        <p className="text-2xl font-black text-rose-700">€ {stats.totalGiven.toLocaleString()}</p>
+        <p className="text-2xl font-black text-rose-700">৳ {stats.totalGiven.toLocaleString()}</p>
       </div>
 
       {/* Total Received Card */}
@@ -40,7 +40,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">মোট ফেরত পেয়েছি</p>
         </div>
-        <p className="text-2xl font-black text-emerald-700">€ {stats.totalReceived.toLocaleString()}</p>
+        <p className="text-2xl font-black text-emerald-700">৳ {stats.totalReceived.toLocaleString()}</p>
       </div>
     </div>
   );

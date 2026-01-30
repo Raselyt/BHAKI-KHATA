@@ -39,7 +39,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, o
           <div className="flex justify-between items-start gap-2">
             <h3 className="font-black text-slate-800 truncate text-lg">{transaction.name}</h3>
             <span className={`font-black text-xl shrink-0 ${isJoma ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {isJoma ? '+' : '-'} € {transaction.amount.toLocaleString()}
+              {isJoma ? '+' : '-'} ৳ {transaction.amount.toLocaleString()}
             </span>
           </div>
           
@@ -58,10 +58,10 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, o
               {transaction.note && <p className="text-[10px] text-slate-500 mt-1 italic font-medium truncate"># {transaction.note}</p>}
             </div>
 
-            {/* Delete Button - Made always visible for mobile accessibility */}
+            {/* Delete Button */}
             <button 
               onClick={(e) => {
-                e.stopPropagation(); // Prevents clicking the whole card
+                e.stopPropagation(); 
                 onDelete(transaction.id);
               }}
               className="ml-2 bg-rose-50 text-rose-400 hover:text-rose-600 p-2.5 rounded-xl transition-all active:scale-90"

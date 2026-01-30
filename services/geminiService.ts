@@ -4,15 +4,15 @@ import { Transaction } from "../types";
 
 // Helper function for transaction parsing using Gemini
 export const parseTransactionPrompt = async (userInput: string) => {
-  // Always create a new instance right before making an API call to ensure it always uses the most up-to-date API key
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Parse this Bengali shop transaction: "${userInput}".`,
     config: {
-      systemInstruction: `Extract the customer name, amount (number), and type. 
+      systemInstruction: `Extract the customer name, amount (number), type, and reason/note. 
       Types must be one of: "বাকি (বাকী)", "বিকাশ বাকি", "বিকাশ জমা", "নগদ পরিশোধ". 
+      If a specific reason is mentioned (like "recharge", "photocopy", "pen"), put it in the "note" field in Bengali.
       Return the data in JSON format.`,
       responseMimeType: "application/json",
       responseSchema: {
@@ -24,6 +24,10 @@ export const parseTransactionPrompt = async (userInput: string) => {
             type: Type.STRING,
             description: "Transaction type in Bengali"
           },
+          note: {
+            type: Type.STRING,
+            description: "The reason for the credit (e.g. recharge, photocopy)"
+          },
           confidence: { type: Type.NUMBER }
         },
         required: ["name", "amount", "type"]
@@ -32,7 +36,6 @@ export const parseTransactionPrompt = async (userInput: string) => {
   });
 
   try {
-    // Accessing .text property directly as per guidelines
     const jsonStr = response.text?.trim() || "{}";
     return JSON.parse(jsonStr);
   } catch (e) {
@@ -43,7 +46,6 @@ export const parseTransactionPrompt = async (userInput: string) => {
 
 // Helper function to get AI-driven financial advice
 export const getFinancialAdvice = async (transactions: Transaction[]) => {
-  // Always create a new instance right before making an API call
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const summary = JSON.stringify(transactions.slice(0, 20));
   
@@ -55,6 +57,5 @@ export const getFinancialAdvice = async (transactions: Transaction[]) => {
     }
   });
 
-  // Accessing .text property directly as per guidelines
   return response.text;
 };
