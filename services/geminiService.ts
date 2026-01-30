@@ -1,10 +1,17 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction } from "../types";
+import { Transaction } from "../types.ts";
 
 // Helper function for transaction parsing using Gemini
 export const parseTransactionPrompt = async (userInput: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Use window.process safely for browser environments
+  const apiKey = (window as any).process?.env?.API_KEY || "";
+  if (!apiKey) {
+    console.error("AI API Key not found");
+    return null;
+  }
+  
+  const ai = new GoogleGenAI({ apiKey });
   
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -46,7 +53,10 @@ export const parseTransactionPrompt = async (userInput: string) => {
 
 // Helper function to get AI-driven financial advice
 export const getFinancialAdvice = async (transactions: Transaction[]) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = (window as any).process?.env?.API_KEY || "";
+  if (!apiKey) return "AI কানেক্ট করা নেই।";
+  
+  const ai = new GoogleGenAI({ apiKey });
   const summary = JSON.stringify(transactions.slice(0, 20));
   
   const response = await ai.models.generateContent({

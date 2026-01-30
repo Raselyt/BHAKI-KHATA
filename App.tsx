@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layout } from './components/Layout';
-import { Transaction, TransactionType, DashboardStats as StatsType } from './types';
-import { TransactionCard } from './components/TransactionCard';
-import { DashboardStats } from './components/DashboardStats';
-import { SmartAddInput } from './components/SmartAddInput';
-import { supabase } from './lib/supabase';
+import { Layout } from './components/Layout.tsx';
+import { Transaction, TransactionType, DashboardStats as StatsType } from './types.ts';
+import { TransactionCard } from './components/TransactionCard.tsx';
+import { DashboardStats } from './components/DashboardStats.tsx';
+import { SmartAddInput } from './components/SmartAddInput.tsx';
+import { supabase } from './lib/supabase.ts';
 
 const App: React.FC = () => {
   // --- Auth State ---
@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [isSignup, setIsSignup] = useState(false);
   const [authForm, setAuthForm] = useState({ email: '', password: '' });
   const [authLoading, setAuthLoading] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(true);
 
   // --- App State ---
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -33,9 +34,18 @@ const App: React.FC = () => {
 
   // 1. Initial Auth Check
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+      } catch (err) {
+        console.error("Supabase connection error:", err);
+      } finally {
+        setBootstrapping(false);
+      }
+    };
+
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
@@ -52,6 +62,7 @@ const App: React.FC = () => {
   }, [session]);
 
   const fetchData = async () => {
+    if (!session) return;
     setIsLoading(true);
     try {
       // Fetch Transactions
@@ -89,13 +100,14 @@ const App: React.FC = () => {
       if (isSignup) {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        alert("একাউন্ট তৈরি হয়েছে! দয়া করে আপনার ইমেইল চেক করুন অথবা লগইন করুন।");
+        alert("একাউন্ট তৈরি হয়েছে! ইমেইল চেক করুন অথবা এখন লগইন করুন।");
+        setIsSignup(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
     } catch (error: any) {
-      alert(error.message || "Auth error");
+      alert(error.message || "লগইন এ সমস্যা হয়েছে। আপনার তথ্য চেক করুন।");
     } finally {
       setAuthLoading(false);
     }
@@ -109,6 +121,7 @@ const App: React.FC = () => {
 
   // --- Data Handlers ---
   const handleAddTransaction = async (data?: { name: string; amount: number; type: TransactionType; note?: string }) => {
+    if (!session) return;
     const nameToUse = (data?.name || formData.name).trim();
     const amountToUse = data?.amount || Number(formData.amount);
     const typeToUse = data?.type || formData.type;
@@ -121,14 +134,14 @@ const App: React.FC = () => {
       amount: amountToUse, 
       type: typeToUse, 
       date: new Date().toISOString(),
-      note: noteToUse.trim() || undefined,
+      note: noteToUse?.trim() || undefined,
       user_id: session.user.id
     };
     
     try {
       const { data: inserted, error } = await supabase.from('transactions').insert([newTx]).select();
       if (error) throw error;
-      setTransactions(prev => [inserted[0], ...prev]);
+      if (inserted) setTransactions(prev => [inserted[0], ...prev]);
       setIsModalOpen(false);
       setFormData({ name: '', amount: '', type: TransactionType.BAKI, note: '' });
     } catch (error: any) {
@@ -166,7 +179,6 @@ const App: React.FC = () => {
       
       if (error) throw error;
 
-      // Update local state instead of refetching
       setTransactions(prev => prev.map(tx => tx.name === selectedPerson ? { ...tx, name: targetName } : tx));
       
       if (customerPhones[selectedPerson]) {
@@ -187,7 +199,7 @@ const App: React.FC = () => {
   };
 
   const handleSavePhone = async () => {
-    if (!selectedPerson) return;
+    if (!selectedPerson || !session) return;
     const phone = newPhone.trim();
     try {
       const { error } = await supabase
@@ -203,7 +215,7 @@ const App: React.FC = () => {
   };
 
   const handlePayment = async () => {
-    if (!selectedPerson || !payAmount) return;
+    if (!selectedPerson || !payAmount || !session) return;
     const pAmount = parseFloat(payAmount);
     if (isNaN(pAmount) || pAmount <= 0) return;
     
@@ -219,7 +231,7 @@ const App: React.FC = () => {
     try {
       const { data: inserted, error } = await supabase.from('transactions').insert([paymentRecord]).select();
       if (error) throw error;
-      setTransactions(prev => [inserted[0], ...prev]);
+      if (inserted) setTransactions(prev => [inserted[0], ...prev]);
       setIsPayModalOpen(false);
       setPayAmount('');
     } catch (error: any) {
@@ -254,6 +266,16 @@ const App: React.FC = () => {
     return Object.entries(customerFolders).filter(([name]) => name.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => a[0].localeCompare(b[0]));
   }, [customerFolders, searchQuery]);
 
+  // Initializing View
+  if (bootstrapping) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="font-bold text-slate-400">খাতা চালু হচ্ছে...</p>
+      </div>
+    );
+  }
+
   // Auth View
   if (!session) {
     return (
@@ -263,13 +285,13 @@ const App: React.FC = () => {
             <div className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-lg shadow-emerald-100 mb-4">
                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">ক্লাউড বাকি খাতা</h1>
-            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1 text-center">আপনার হিসাব এখন অনলাইনে সুরক্ষিত</p>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight text-center">ক্লাউড বাকি খাতা</h1>
+            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1 text-center">অনলাইন ব্যাকআপ ও সিকিউর হিসাব</p>
           </div>
 
           <form onSubmit={handleAuth} className="space-y-4">
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ইমেইল</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ইমেইল ঠিকানা</label>
               <input 
                 type="email" 
                 value={authForm.email}
@@ -310,7 +332,7 @@ const App: React.FC = () => {
             </p>
           </div>
         </div>
-        <p className="mt-8 text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">Powered by Supabase Database</p>
+        <p className="mt-8 text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">ডাটাবেস কানেক্টেড (Supabase)</p>
       </div>
     );
   }
@@ -399,7 +421,7 @@ const App: React.FC = () => {
         </>
       )}
 
-      {/* Modals maintained from previous version but wired to Supabase functions */}
+      {/* Modals maintained from previous version */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl rounded-t-[3rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
