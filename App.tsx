@@ -15,6 +15,7 @@ import { Login } from './components/Login.tsx';
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [shopName, setShopName] = useState("দোকানের খাতা");
+  const [userId, setUserId] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [customerPhones, setCustomerPhones] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -23,7 +24,6 @@ const App: React.FC = () => {
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
   
-  // Navigation State
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -31,47 +31,56 @@ const App: React.FC = () => {
     const checkAuth = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (session && !error) {
-        setIsLoggedIn(true);
-        setShopName(session.user.user_metadata?.shop_name || "আমার খাতা");
+        handleAuthSuccess(session);
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        setIsLoggedIn(true);
-        setShopName(session.user.user_metadata?.shop_name || "আমার খাতা");
+        handleAuthSuccess(session);
       } else {
         setIsLoggedIn(false);
+        setUserId(null);
       }
     });
-
-    const local = localStorage.getItem('transactions');
-    const localPhones = localStorage.getItem('customerPhones');
-    if (local) setTransactions(JSON.parse(local));
-    if (localPhones) setCustomerPhones(JSON.parse(localPhones));
-    fetchTransactions();
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchTransactions = async () => {
+  const handleAuthSuccess = (session: any) => {
+    setIsLoggedIn(true);
+    setUserId(session.user.id);
+    setShopName(session.user.user_metadata?.shop_name || "আমার খাতা");
+    setLoading(false);
+    // Fetch data immediately after login/session detection
+    fetchTransactions(session.user.id);
+  };
+
+  const fetchTransactions = async (uid: string) => {
+    if (!uid) return;
     setSyncing(true);
     try {
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
+        .eq('user_id', uid) // Crucial: Only fetch this user's data
         .order('date', { ascending: false });
 
       if (error) throw error;
-      if (data && data.length > 0) {
+      
+      if (data) {
         setTransactions(data);
         localStorage.setItem('transactions', JSON.stringify(data));
-        setSyncMessage("অনলাইন সিঙ্ক সম্পন্ন ✅");
+        setSyncMessage("ডাটা সিঙ্ক হয়েছে ✅");
       }
     } catch (error) {
+      console.error("Fetch error:", error);
+      const local = localStorage.getItem('transactions');
+      if (local) setTransactions(JSON.parse(local));
       setSyncMessage("অফলাইন মোড 📁");
     } finally {
       setSyncing(false);
@@ -87,36 +96,8 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     if (confirm("আপনি কি নিশ্চিতভাবে লগ আউট করতে চান?")) {
       await supabase.auth.signOut();
-      localStorage.clear(); // Complete cleanup
-      window.location.reload(); // Hard refresh to clear all states
-    }
-  };
-
-  const handleImportData = async (importedData: any) => {
-    setSyncing(true);
-    try {
-      let finalTransactions: Transaction[] = [];
-      let phones: Record<string, string> = {};
-      
-      if (Array.isArray(importedData)) {
-        finalTransactions = importedData;
-      } else if (importedData && importedData.transactions) {
-        finalTransactions = importedData.transactions;
-        if (importedData.customerPhones) {
-          phones = importedData.customerPhones;
-        }
-      }
-
-      setTransactions(finalTransactions);
-      setCustomerPhones(phones);
-      localStorage.setItem('transactions', JSON.stringify(finalTransactions));
-      localStorage.setItem('customerPhones', JSON.stringify(phones));
-      setSyncMessage("ডেটা ইম্পোর্ট সফল ✅");
-    } catch (error) {
-      alert("ডেটা ইম্পোর্ট করতে সমস্যা হয়েছে।");
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncMessage(null), 3000);
+      localStorage.clear();
+      window.location.reload();
     }
   };
 
@@ -162,16 +143,31 @@ const App: React.FC = () => {
   }, [transactions, searchQuery, customerPhones]);
 
   const handleAddTransaction = async (data: { name: string; amount: number; type: TransactionType; note?: string }) => {
+    if (!userId) return;
+    
     const tempId = `local-${Date.now()}`;
-    const newTransaction: Transaction = { ...data, id: tempId, date: new Date().toISOString() };
+    const date = new Date().toISOString();
+    const newTransaction: Transaction = { ...data, id: tempId, date };
+    
+    // Update UI immediately (Optimistic UI)
     const updatedTransactions = [newTransaction, ...transactions];
     setTransactions(updatedTransactions);
     localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
-    setSyncMessage("সেভ হয়েছে ✅");
+    setSyncMessage("সেভ হচ্ছে...");
 
     try {
-      await supabase.from('transactions').insert([{ ...data, date: newTransaction.date }]);
-    } catch (e) {}
+      const { error } = await supabase.from('transactions').insert([{ 
+        ...data, 
+        date, 
+        user_id: userId // Save with the user ID so it syncs across devices
+      }]);
+      
+      if (error) throw error;
+      setSyncMessage("সেভ হয়েছে ✅");
+    } catch (e) {
+      console.error("Save error:", e);
+      setSyncMessage("অফলাইনে সেভ হলো ⚠️");
+    }
     setTimeout(() => setSyncMessage(null), 3000);
   };
 
@@ -180,7 +176,9 @@ const App: React.FC = () => {
     const updated = transactions.filter(t => t.id !== id);
     setTransactions(updated);
     localStorage.setItem('transactions', JSON.stringify(updated));
-    if (!id.startsWith('local-')) await supabase.from('transactions').delete().eq('id', id);
+    if (!id.startsWith('local-')) {
+      await supabase.from('transactions').delete().eq('id', id);
+    }
     setSyncMessage("মুছে ফেলা হয়েছে");
     setTimeout(() => setSyncMessage(null), 3000);
   };
@@ -218,12 +216,12 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout username={shopName} onSyncClick={() => setIsSyncModalOpen(true)} onLogout={handleLogout}>
+    <Layout username={shopName} onSyncClick={() => fetchTransactions(userId!)} onLogout={handleLogout}>
       <SyncModal 
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         transactions={transactions}
-        onImportData={handleImportData}
+        onImportData={() => {}} 
       />
 
       <ManualAddModal 
@@ -233,7 +231,7 @@ const App: React.FC = () => {
       />
 
       {syncMessage && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[150] animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="bg-[#0f172a] text-white px-6 py-3 rounded-full text-xs font-black shadow-2xl border border-white/10 flex items-center gap-2">
             <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
             {syncMessage}
@@ -259,14 +257,14 @@ const App: React.FC = () => {
          </div>
       </div>
 
-      <div className="mt-6 space-y-4 pb-40">
+      <div className="mt-6 space-y-4 pb-48">
         {customers.length === 0 ? (
           <div className="py-20 text-center bg-slate-50 rounded-[3.5rem] border-2 border-dashed border-slate-200">
             <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center mx-auto mb-5 shadow-sm">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
             <h3 className="text-slate-500 font-black text-lg mb-1">কোনো হিসাব পাওয়া যায়নি</h3>
-            <p className="text-slate-400 text-sm font-bold">নতুন কাষ্টমার যোগ করতে নিচের বাটন ব্যবহার করুন</p>
+            <p className="text-slate-400 text-sm font-bold">নতুন হিসাব যোগ করতে নিচের বাটনটি ব্যবহার করুন</p>
           </div>
         ) : (
           customers.map(customer => (
@@ -279,19 +277,22 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Modern Floating Action Bar */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-[100] animate-in slide-in-from-bottom-10 duration-500 delay-300">
+      {/* Luxury Floating Action Bar */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-[100] animate-in slide-in-from-bottom-12 duration-700">
         <button 
           onClick={() => setIsManualAddOpen(true)}
-          className="w-full bg-[#0f172a] text-white p-2 rounded-[2.5rem] shadow-[0_20px_40px_rgba(15,23,42,0.3)] flex items-center justify-between group active:scale-[0.97] transition-all border-2 border-white/5"
+          className="w-full bg-[#0f172a] text-white p-1.5 pr-2 rounded-[2.8rem] shadow-[0_25px_50px_-12px_rgba(15,23,42,0.5)] flex items-center justify-between group active:scale-[0.96] transition-all border border-white/10"
         >
           <div className="flex items-center gap-4 pl-4">
-            <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center group-hover:rotate-90 transition-transform duration-500">
+            <div className="w-12 h-12 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg group-hover:rotate-180 transition-transform duration-700">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
             </div>
-            <span className="font-black text-lg tracking-tight">নতুন হিসাব যোগ করুন</span>
+            <div className="text-left">
+              <span className="block font-black text-lg leading-none mb-0.5">নতুন হিসাব যোগ করুন</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">বাকি বা জমার রেকর্ড</span>
+            </div>
           </div>
-          <div className="bg-emerald-500 w-12 h-12 rounded-full flex items-center justify-center shadow-lg mr-1">
+          <div className="bg-white/10 w-12 h-12 rounded-full flex items-center justify-center transition-colors group-hover:bg-white/20">
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
           </div>
         </button>
