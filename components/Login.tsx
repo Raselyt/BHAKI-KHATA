@@ -1,164 +1,173 @@
 
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase.ts';
 
 interface LoginProps {
-  onLogin: (shopName: string) => void;
+  onLogin: (shopName: string, email: string) => void;
 }
 
 type AuthMode = 'login' | 'register';
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<AuthMode>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [shopName, setShopName] = useState('');
-  const [pin, setPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [registeredShop, setRegisteredShop] = useState<{ name: string, pin: string } | null>(null);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('shopInfo');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setRegisteredShop(parsed);
-      setMode('login');
-    } else {
-      setMode('register');
-    }
-  }, []);
-
-  const handleRegister = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shopName.trim()) {
-      showError("দোকানের নাম লিখুন");
-      return;
-    }
-    if (pin.length < 4) {
-      showError("কমপক্ষে ৪ সংখ্যার পিন দিন");
-      return;
-    }
-    if (pin !== confirmPin) {
-      showError("পিন দুটি মিলছে না!");
-      return;
-    }
+    setLoading(true);
+    setError(null);
 
-    const shopInfo = { name: shopName, pin };
-    localStorage.setItem('shopInfo', JSON.stringify(shopInfo));
-    setRegisteredShop(shopInfo);
-    onLogin(shopName);
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (registeredShop && pin === registeredShop.pin) {
-      onLogin(registeredShop.name);
-    } else {
-      showError("ভুল পিন! আবার চেষ্টা করুন।");
+    try {
+      if (mode === 'register') {
+        if (!shopName.trim()) throw new Error("দোকানের নাম লিখুন");
+        
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { shop_name: shopName }
+          }
+        });
+        if (signUpError) throw signUpError;
+        
+        localStorage.setItem('shopInfo', JSON.stringify({ name: shopName }));
+        onLogin(shopName, email);
+      } else {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
+        
+        const userShopName = data.user?.user_metadata?.shop_name || "আমার খাতা";
+        localStorage.setItem('shopInfo', JSON.stringify({ name: userShopName }));
+        onLogin(userShopName, email);
+      }
+    } catch (err: any) {
+      setError(err.message === "Invalid login credentials" ? "ভুল ইমেইল বা পাসওয়ার্ড!" : err.message);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const showError = (msg: string) => {
-    setError(msg);
-    setTimeout(() => setError(null), 3000);
   };
 
   return (
-    <div className="min-h-screen bg-emerald-600 flex flex-col items-center justify-center p-6 text-white overflow-hidden relative">
-      {/* Background patterns */}
-      <div className="absolute top-[-5%] left-[-5%] w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-[-5%] right-[-5%] w-80 h-80 bg-white/5 rounded-full blur-3xl"></div>
-
-      <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center mb-6 shadow-2xl animate-in zoom-in duration-500">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-      </div>
-      
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-black mb-2 animate-in slide-in-from-top duration-700">
-          {mode === 'register' ? 'খাতা খুলুন' : 'লগইন করুন'}
-        </h1>
-        <p className="text-emerald-100 font-bold opacity-70 text-sm tracking-wide">
-          {mode === 'register' ? 'আপনার দোকানের ডিজিটাল হিসাব শুরু করুন' : `স্বাগতম, ${registeredShop?.name || 'দোকানি'}`}
-        </p>
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-6 text-[#0f172a]">
+      {/* Top Icon - Wallet Icon fits "Baki" perfectly */}
+      <div className="w-24 h-24 bg-[#0f172a] rounded-[2.5rem] flex items-center justify-center mb-6 shadow-2xl animate-in zoom-in duration-500">
+        <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" />
+          <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
+        </svg>
       </div>
 
-      <div className="w-full max-w-sm bg-white/10 backdrop-blur-xl p-8 rounded-[3rem] border border-white/20 shadow-2xl relative z-10 animate-in slide-in-from-bottom duration-500">
-        <form onSubmit={mode === 'register' ? handleRegister : handleLogin} className="space-y-4">
+      <div className="text-center mb-10">
+        <h1 className="text-4xl font-black mb-2 tracking-tight">বাকির যম</h1>
+        <p className="text-[#94a3b8] font-black text-[10px] uppercase tracking-[0.2em]">বাকি টাকার ডিজিটাল হিসাব খাতা</p>
+      </div>
+
+      <div className="w-full max-w-md bg-white p-2 rounded-[3.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 animate-in slide-in-from-bottom-8 duration-700">
+        {/* Tabs */}
+        <div className="flex bg-[#f1f5f9] rounded-[3rem] p-1.5 mb-8">
+          <button 
+            onClick={() => setMode('login')}
+            className={`flex-1 py-4 rounded-[2.5rem] text-sm font-black transition-all ${mode === 'login' ? 'bg-white shadow-sm text-[#0f172a]' : 'text-[#94a3b8]'}`}
+          >
+            লগইন
+          </button>
+          <button 
+            onClick={() => setMode('register')}
+            className={`flex-1 py-4 rounded-[2.5rem] text-sm font-black transition-all ${mode === 'register' ? 'bg-white shadow-sm text-[#0f172a]' : 'text-[#94a3b8]'}`}
+          >
+            নতুন অ্যাকাউন্ট
+          </button>
+        </div>
+
+        <form onSubmit={handleAuth} className="px-6 pb-8 space-y-5">
           {mode === 'register' && (
-            <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-              <label className="text-[10px] font-black uppercase tracking-widest ml-4 mb-2 block opacity-60">দোকানের নাম</label>
+            <div className="relative animate-in fade-in slide-in-from-top-2">
+              <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              </div>
               <input 
                 type="text" 
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
-                placeholder="যেমন: বিসমিল্লাহ টেলিকম"
-                className="w-full p-4 bg-white/10 border-2 border-white/20 rounded-2xl text-center text-lg font-bold placeholder:text-white/30 outline-none focus:bg-white/20 focus:border-white/40 transition-all"
+                placeholder="দোকানের নাম লিখুন"
+                className="w-full p-5 pl-14 bg-[#f8fafc] border-2 border-slate-50 rounded-2xl text-sm font-bold placeholder:text-slate-400 outline-none focus:border-[#0f172a]/10 transition-all"
+                required
               />
             </div>
           )}
 
-          <div>
-            <label className="text-[10px] font-black uppercase tracking-widest ml-4 mb-2 block opacity-60">গোপন পিন</label>
+          <div className="relative">
+            <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            </div>
             <input 
-              type="password" 
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="৪ সংখ্যার পিন"
-              className={`w-full p-5 bg-white/10 border-2 ${error ? 'border-rose-400' : 'border-white/20'} rounded-2xl text-center text-3xl font-black placeholder:text-white/30 outline-none focus:bg-white/20 transition-all`}
-              maxLength={4}
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ইমেইল অ্যাড্রেস"
+              className="w-full p-5 pl-14 bg-[#f8fafc] border-2 border-slate-50 rounded-2xl text-sm font-bold placeholder:text-slate-400 outline-none focus:border-[#0f172a]/10 transition-all"
+              required
             />
           </div>
 
-          {mode === 'register' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <label className="text-[10px] font-black uppercase tracking-widest ml-4 mb-2 block opacity-60">পিন নিশ্চিত করুন</label>
-              <input 
-                type="password" 
-                value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value)}
-                placeholder="আবার পিন দিন"
-                className="w-full p-4 bg-white/10 border-2 border-white/20 rounded-2xl text-center text-lg font-bold placeholder:text-white/30 outline-none focus:bg-white/20 transition-all"
-                maxLength={4}
-              />
+          <div className="relative">
+            <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </div>
-          )}
+            <input 
+              type={showPassword ? "text" : "password"} 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="পাসওয়ার্ড"
+              className="w-full p-5 pl-14 pr-14 bg-[#f8fafc] border-2 border-slate-50 rounded-2xl text-sm font-bold placeholder:text-slate-400 outline-none focus:border-[#0f172a]/10 transition-all"
+              required
+            />
+            <button 
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              {showPassword ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              )}
+            </button>
+          </div>
 
           {error && (
-            <div className="bg-rose-500/20 py-2 rounded-xl border border-rose-500/30">
-               <p className="text-center text-rose-200 text-xs font-black animate-pulse">{error}</p>
-            </div>
+            <p className="text-center text-rose-500 text-[11px] font-black animate-pulse px-4">{error}</p>
           )}
           
           <button 
             type="submit"
-            className="w-full bg-white text-emerald-700 py-5 rounded-2xl font-black text-xl shadow-xl active:scale-95 transition-all mt-6"
+            disabled={loading}
+            className="w-full bg-[#0f172a] text-white py-5 rounded-2xl font-black text-lg shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-70"
           >
-            {mode === 'register' ? 'রেজিষ্ট্রেশন করুন' : 'লগইন করুন'}
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <>
+                {mode === 'register' ? 'অ্যাকাউন্ট খুলুন' : 'অ্যাপে প্রবেশ করুন'}
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              </>
+            )}
           </button>
         </form>
-
-        <div className="mt-8 pt-6 border-t border-white/10 text-center">
-           <button 
-             onClick={() => {
-               setMode(mode === 'login' ? 'register' : 'login');
-               setError(null);
-             }}
-             className="text-emerald-100/70 font-black text-xs uppercase tracking-widest hover:text-white transition-colors flex items-center justify-center gap-2 mx-auto"
-           >
-             {mode === 'login' ? (
-               <>
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-                 নতুন অ্যাকাউন্ট খুলুন
-               </>
-             ) : (
-               <>
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-                 আগের অ্যাকাউন্টে লগইন
-               </>
-             )}
-           </button>
-        </div>
       </div>
       
-      <p className="mt-12 text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Bismillah Telecom • Digital Ledger</p>
+      <div className="mt-12 flex items-center gap-2 opacity-40">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+        <p className="text-[10px] font-black uppercase tracking-widest">হিসাব রাখা এখন পানির মত সহজ</p>
+      </div>
     </div>
   );
 };

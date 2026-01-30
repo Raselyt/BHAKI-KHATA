@@ -28,22 +28,37 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    // Check session
-    const auth = localStorage.getItem('isLoggedIn');
-    const savedShop = localStorage.getItem('shopInfo');
-    
-    if (auth === 'true') {
-      setIsLoggedIn(true);
-      if (savedShop) {
-        setShopName(JSON.parse(savedShop).name);
+    // Initial Auth Check
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsLoggedIn(true);
+        const name = session.user.user_metadata?.shop_name || "আমার খাতা";
+        setShopName(name);
       }
-    }
+      setLoading(false);
+    };
+
+    checkAuth();
+
+    // Listen for Auth Changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setIsLoggedIn(true);
+        const name = session.user.user_metadata?.shop_name || "আমার খাতা";
+        setShopName(name);
+      } else {
+        setIsLoggedIn(false);
+      }
+    });
 
     const local = localStorage.getItem('transactions');
     const localPhones = localStorage.getItem('customerPhones');
     if (local) setTransactions(JSON.parse(local));
     if (localPhones) setCustomerPhones(JSON.parse(localPhones));
     fetchTransactions();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchTransactions = async () => {
@@ -72,13 +87,12 @@ const App: React.FC = () => {
   const handleLogin = (name: string) => {
     setShopName(name);
     setIsLoggedIn(true);
-    localStorage.setItem('isLoggedIn', 'true');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm("আপনি কি নিশ্চিতভাবে লগ আউট করতে চান?")) {
+      await supabase.auth.signOut();
       setIsLoggedIn(false);
-      localStorage.removeItem('isLoggedIn');
     }
   };
 
@@ -176,6 +190,14 @@ const App: React.FC = () => {
     setTimeout(() => setSyncMessage(null), 3000);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-12 h-12 border-4 border-[#0f172a] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   if (!isLoggedIn) {
     return <Login onLogin={handleLogin} />;
   }
@@ -235,7 +257,7 @@ const App: React.FC = () => {
              placeholder="নাম দিয়ে কাস্টমার খুঁজুন..."
              value={searchQuery}
              onChange={(e) => setSearchQuery(e.target.value)}
-             className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 focus:outline-none transition-all font-medium text-sm"
+             className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:outline-none transition-all font-medium text-sm"
            />
          </div>
       </div>
@@ -263,7 +285,7 @@ const App: React.FC = () => {
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-50">
         <button 
           onClick={() => setIsManualAddOpen(true)}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-5 rounded-[2.5rem] font-black text-xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all border-4 border-white"
+          className="w-full bg-[#0f172a] hover:bg-[#1e293b] text-white py-5 rounded-[2.5rem] font-black text-xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all border-4 border-white"
         >
           <div className="bg-white/20 p-1.5 rounded-xl">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
