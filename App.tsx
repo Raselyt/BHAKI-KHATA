@@ -56,18 +56,18 @@ const App: React.FC = () => {
     setUserId(session.user.id);
     setShopName(session.user.user_metadata?.shop_name || "আমার খাতা");
     setLoading(false);
-    // Fetch data immediately after login/session detection
     fetchTransactions(session.user.id);
   };
 
   const fetchTransactions = async (uid: string) => {
     if (!uid) return;
     setSyncing(true);
+    setSyncMessage("ডাটা লোড হচ্ছে...");
     try {
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', uid) // Crucial: Only fetch this user's data
+        .eq('user_id', uid)
         .order('date', { ascending: false });
 
       if (error) throw error;
@@ -78,7 +78,6 @@ const App: React.FC = () => {
         setSyncMessage("ডাটা সিঙ্ক হয়েছে ✅");
       }
     } catch (error) {
-      console.error("Fetch error:", error);
       const local = localStorage.getItem('transactions');
       if (local) setTransactions(JSON.parse(local));
       setSyncMessage("অফলাইন মোড 📁");
@@ -98,6 +97,37 @@ const App: React.FC = () => {
       await supabase.auth.signOut();
       localStorage.clear();
       window.location.reload();
+    }
+  };
+
+  const handleImportData = async (importedData: any) => {
+    setSyncing(true);
+    try {
+      let finalTransactions: Transaction[] = [];
+      if (Array.isArray(importedData)) {
+        finalTransactions = importedData;
+      } else if (importedData && importedData.transactions) {
+        finalTransactions = importedData.transactions;
+      }
+
+      // Add user_id to imported transactions if missing
+      const sanitized = finalTransactions.map(t => ({...t, user_id: userId}));
+      
+      setTransactions(sanitized);
+      localStorage.setItem('transactions', JSON.stringify(sanitized));
+      
+      // Upload to Supabase
+      if (userId) {
+        await supabase.from('transactions').insert(sanitized);
+      }
+      
+      setSyncMessage("ইম্পোর্ট সফল ✅");
+      setIsSyncModalOpen(false);
+    } catch (error) {
+      alert("ইম্পোর্ট করতে সমস্যা হয়েছে।");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMessage(null), 3000);
     }
   };
 
@@ -149,23 +179,18 @@ const App: React.FC = () => {
     const date = new Date().toISOString();
     const newTransaction: Transaction = { ...data, id: tempId, date };
     
-    // Update UI immediately (Optimistic UI)
     const updatedTransactions = [newTransaction, ...transactions];
     setTransactions(updatedTransactions);
     localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
-    setSyncMessage("সেভ হচ্ছে...");
 
     try {
-      const { error } = await supabase.from('transactions').insert([{ 
+      await supabase.from('transactions').insert([{ 
         ...data, 
         date, 
-        user_id: userId // Save with the user ID so it syncs across devices
+        user_id: userId 
       }]);
-      
-      if (error) throw error;
       setSyncMessage("সেভ হয়েছে ✅");
     } catch (e) {
-      console.error("Save error:", e);
       setSyncMessage("অফলাইনে সেভ হলো ⚠️");
     }
     setTimeout(() => setSyncMessage(null), 3000);
@@ -216,12 +241,17 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout username={shopName} onSyncClick={() => fetchTransactions(userId!)} onLogout={handleLogout}>
+    <Layout 
+      username={shopName} 
+      onRefresh={() => fetchTransactions(userId!)} 
+      onSyncClick={() => setIsSyncModalOpen(true)}
+      onLogout={handleLogout}
+    >
       <SyncModal 
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         transactions={transactions}
-        onImportData={() => {}} 
+        onImportData={handleImportData} 
       />
 
       <ManualAddModal 
@@ -277,7 +307,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Luxury Floating Action Bar */}
+      {/* Floating Action Bar */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-[100] animate-in slide-in-from-bottom-12 duration-700">
         <button 
           onClick={() => setIsManualAddOpen(true)}

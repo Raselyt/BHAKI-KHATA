@@ -3,12 +3,13 @@ import React, { useState } from 'react';
 
 interface LayoutProps {
   children: React.ReactNode;
+  onRefresh?: () => void;
   onSyncClick?: () => void;
   onLogout?: () => void;
   username?: string;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, onSyncClick, onLogout, username }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onRefresh, onSyncClick, onLogout, username }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const initial = username ? username.charAt(0).toUpperCase() : 'U';
 
@@ -26,11 +27,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSyncClick, onLogout,
         </div>
         
         <div className="flex items-center gap-2">
-          {onSyncClick && (
+          {onRefresh && (
             <button 
-              onClick={onSyncClick}
+              onClick={onRefresh}
               className="p-2.5 text-slate-400 hover:text-[#0f172a] hover:bg-slate-50 rounded-2xl transition-all active:scale-90"
-              title="সিঙ্ক করুন"
+              title="রিফ্রেশ করুন"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
             </button>
@@ -63,11 +64,26 @@ export const Layout: React.FC<LayoutProps> = ({ children, onSyncClick, onLogout,
             {showProfileMenu && (
               <>
                 <div className="fixed inset-0 z-[120] bg-slate-900/5 backdrop-blur-[2px]" onClick={() => setShowProfileMenu(false)} />
-                <div className="absolute top-full right-0 mt-3 w-60 bg-white rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-100 p-2 animate-in fade-in zoom-in-95 slide-in-from-top-2 z-[130]">
+                <div className="absolute top-full right-0 mt-3 w-64 bg-white rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-100 p-2 animate-in fade-in zoom-in-95 slide-in-from-top-2 z-[130]">
                   <div className="px-5 py-4 border-b border-slate-50 mb-1">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">লগইন আছেন</p>
                     <p className="text-sm font-black text-slate-800 truncate">{username}</p>
                   </div>
+                  
+                  {/* Sync Option in Dropdown */}
+                  <button 
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      onSyncClick?.();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-4 text-slate-700 hover:bg-slate-50 rounded-2xl transition-all font-black text-sm group"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </div>
+                    ডাটা ব্যাকআপ ও সিঙ্ক
+                  </button>
+
                   <button 
                     onClick={() => {
                       setShowProfileMenu(false);
