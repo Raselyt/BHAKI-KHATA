@@ -323,6 +323,13 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
           </tbody>
         </table>
 
+        <div style={{ marginTop: '40px', padding: '15px', backgroundColor: '#fff1f2', borderRadius: '10px', borderLeft: '4px solid #e11d48' }}>
+          <p style={{ margin: '0', fontSize: '14px', color: '#be123c', fontWeight: 'bold' }}>জরুরী তাগাদা (Official Request):</p>
+          <p style={{ margin: '5px 0 0', fontSize: '13px', color: '#e11d48', lineHeight: '1.6' }}>
+            উপরে উল্লেখিত বকেয়া টাকার বিবরণটি চূড়ান্ত হিসাব হিসেবে গণ্য করা হলো। অনুগ্রহ করে দ্রুত সময়ের মধ্যে আপনার সম্পূর্ণ বকেয়া টাকা পরিশোধ করে ব্যবসায়িক লেনদেন পরিষ্কার রাখুন। আপনার একান্ত সহযোগিতা আমাদের কাম্য।
+          </p>
+        </div>
+
         <div style={{ marginTop: '50px', textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>
           <p>এই রিপোর্টটি ডিজিটাল বকেয়া খাতা থেকে তৈরি করা হয়েছে।</p>
         </div>
