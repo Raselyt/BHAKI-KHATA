@@ -7,18 +7,20 @@ interface CustomerFolderProps {
   name: string;
   balance: number;
   phone?: string;
+  shopName: string;
   transactions: Transaction[];
   onBack: () => void;
   onAdd: (data: { name: string; amount: number; type: TransactionType; note?: string }) => void;
   onDelete: (id: string) => void;
 }
 
-export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, phone, transactions, onBack, onAdd, onDelete }) => {
+export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, phone, shopName, transactions, onBack, onAdd, onDelete }) => {
   const [showAddModal, setShowAddModal] = useState<{ type: TransactionType } | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [copyStatus, setCopyStatus] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Generate Message Text
   const generateMessage = () => {
@@ -53,6 +55,40 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
   const handleSMS = () => {
     const url = `sms:${phone || ''}?body=${encodeURIComponent(messageText)}`;
     window.open(url, '_blank');
+  };
+
+  const handleDownloadPDF = async () => {
+    setIsExporting(true);
+    try {
+      // @ts-ignore - html2pdf is imported dynamically
+      const html2pdf = (await import('html2pdf.js')).default;
+      
+      const element = document.getElementById('report-pdf-template');
+      if (!element) throw new Error("Template not found");
+
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${name}_report_${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true,
+          letterRendering: true
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Show temporarily for capture (not strictly needed with html2pdf usually but helps with some rendering issues)
+      element.style.display = 'block';
+      await html2pdf().set(opt).from(element).save();
+      element.style.display = 'none';
+
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      alert("পিডিএফ তৈরি করতে সমস্যা হয়েছে।");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleQuickAdd = () => {
@@ -91,6 +127,17 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
               মেসেজ দিন
+            </button>
+            <button 
+              disabled={isExporting}
+              onClick={handleDownloadPDF}
+              className="w-14 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-all active:scale-95 border border-white/10 disabled:opacity-50"
+            >
+              {isExporting ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              )}
             </button>
             <button 
               onClick={() => window.open(`tel:${phone || ''}`)}
@@ -221,6 +268,61 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
           </div>
         </div>
       )}
+      {/* Hidden PDF Template */}
+      <div id="report-pdf-template" style={{ display: 'none', padding: '20px', fontFamily: "'Hind Siliguri', sans-serif" }}>
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <h1 style={{ fontSize: '32px', margin: '0', color: '#0f172a' }}>{shopName || "বাকির খাতা"}</h1>
+          <p style={{ fontSize: '16px', color: '#64748b', marginTop: '5px' }}>লেনদেন রিপোর্ট (Transaction History)</p>
+        </div>
+
+        <div style={{ padding: '15px', backgroundColor: '#f8fafc', borderRadius: '15px', marginBottom: '25px', display: 'flex', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ margin: '0', fontSize: '12px', color: '#94a3b8', fontWeight: 'bold' }}>গ্রাহকের নাম</p>
+            <p style={{ margin: '0', fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>{name}</p>
+            {phone && <p style={{ margin: '5px 0 0', fontSize: '14px', color: '#64748b' }}>মোবাইল: {phone}</p>}
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ margin: '0', fontSize: '12px', color: '#94a3b8', fontWeight: 'bold' }}>তারিখ</p>
+            <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{new Date().toLocaleDateString('bn-BD')}</p>
+          </div>
+        </div>
+
+        <div style={{ border: '2px solid #f1f5f9', borderRadius: '15px', padding: '20px', marginBottom: '30px' }}>
+          <p style={{ margin: '0 0 5px', fontSize: '14px', color: '#64748b', fontWeight: 'bold' }}>মোট বকেয়া (Balance)</p>
+          <p style={{ margin: '0', fontSize: '36px', fontWeight: '900', color: '#e11d48' }}>৳ {balance.toLocaleString('bn-BD')}</p>
+        </div>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse', borderRadius: '10px', overflow: 'hidden' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#0f172a', color: 'white' }}>
+              <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>তারিখ</th>
+              <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>বিবরণ</th>
+              <th style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>পরিমাণ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((t, idx) => (
+              <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
+                <td style={{ padding: '12px', fontSize: '13px' }}>{new Date(t.date).toLocaleDateString('bn-BD')}</td>
+                <td style={{ padding: '12px', fontSize: '13px' }}>
+                   <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
+                    {t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? 'বাকি' : 'জমা'}
+                   </div>
+                   {t.note && <div style={{ fontSize: '11px', color: '#64748b' }}>{t.note}</div>}
+                </td>
+                <td style={{ padding: '12px', textAlign: 'right', fontWeight: '800', color: t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? '#e11d48' : '#10b981' }}>
+                  {t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? '+ ' : '- '}
+                  ৳ {t.amount.toLocaleString('bn-BD')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ marginTop: '50px', textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>
+          <p>এই রিপোর্টটি ডিজিটাল বকেয়া খাতা থেকে তৈরি করা হয়েছে।</p>
+        </div>
+      </div>
     </div>
   );
 };

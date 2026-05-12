@@ -231,6 +231,7 @@ const App: React.FC = () => {
           name={selectedCustomer}
           balance={customer?.balance || 0}
           phone={customer?.phone}
+          shopName={shopName}
           transactions={customerTransactions}
           onBack={() => setSelectedCustomer(null)}
           onAdd={handleAddTransaction}
