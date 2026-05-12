@@ -32,7 +32,7 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
     const uniqueNotes = Array.from(new Set(bakiNotes)).slice(0, 5).join(', ');
     const reasonText = uniqueNotes ? ` (হিসাব: ${uniqueNotes})` : '';
     
-    return `আসসালামু আলাইকুম ${name}, আপনার কাছে বর্তমানে ${balance} টাকা${reasonText} পাওনা আছে। দয়া করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`;
+    return `আসসালামু আলাইকুম ${name}, আপনার কাছে বর্তমানে ${balance} ইউরো${reasonText} পাওনা আছে। দয়া করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`;
   };
 
   const messageText = generateMessage();
@@ -78,8 +78,12 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
-      // Show temporarily for capture (not strictly needed with html2pdf usually but helps with some rendering issues)
+      // Show temporarily for capture
       element.style.display = 'block';
+      
+      // Small delay to ensure everything is rendered
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       await html2pdf().set(opt).from(element).save();
       element.style.display = 'none';
 
@@ -118,7 +122,7 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
       <div className="bg-[#0f172a] p-8 rounded-[2.5rem] text-white mb-8 shadow-2xl relative overflow-hidden">
         <div className="relative z-10">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">মোট পাওনা</p>
-          <p className="text-4xl font-black mb-6">৳ {balance.toLocaleString()}</p>
+          <p className="text-4xl font-black mb-6">€ {balance.toLocaleString()}</p>
           
           <div className="flex gap-3">
             <button 
@@ -283,13 +287,13 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ margin: '0', fontSize: '12px', color: '#94a3b8', fontWeight: 'bold' }}>তারিখ</p>
-            <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{new Date().toLocaleDateString('bn-BD')}</p>
+            <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{new Date().toLocaleDateString('it-IT')}</p>
           </div>
         </div>
 
         <div style={{ border: '2px solid #f1f5f9', borderRadius: '15px', padding: '20px', marginBottom: '30px' }}>
           <p style={{ margin: '0 0 5px', fontSize: '14px', color: '#64748b', fontWeight: 'bold' }}>মোট বকেয়া (Balance)</p>
-          <p style={{ margin: '0', fontSize: '36px', fontWeight: '900', color: '#e11d48' }}>৳ {balance.toLocaleString('bn-BD')}</p>
+          <p style={{ margin: '0', fontSize: '36px', fontWeight: '900', color: '#e11d48' }}>€ {balance.toLocaleString('it-IT')}</p>
         </div>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', borderRadius: '10px', overflow: 'hidden' }}>
@@ -303,7 +307,7 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
           <tbody>
             {transactions.map((t, idx) => (
               <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
-                <td style={{ padding: '12px', fontSize: '13px' }}>{new Date(t.date).toLocaleDateString('bn-BD')}</td>
+                <td style={{ padding: '12px', fontSize: '13px' }}>{new Date(t.date).toLocaleDateString('it-IT')}</td>
                 <td style={{ padding: '12px', fontSize: '13px' }}>
                    <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
                     {t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? 'বাকি' : 'জমা'}
@@ -312,7 +316,7 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
                 </td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: '800', color: t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? '#e11d48' : '#10b981' }}>
                   {t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? '+ ' : '- '}
-                  ৳ {t.amount.toLocaleString('bn-BD')}
+                  € {t.amount.toLocaleString('it-IT')}
                 </td>
               </tr>
             ))}

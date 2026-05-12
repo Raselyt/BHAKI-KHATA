@@ -27,13 +27,13 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({ customer, onClick })
       <div className="flex-1 min-w-0">
         <h3 className="font-black text-slate-800 truncate text-lg">{customer.name}</h3>
         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-          {customer.count} লেনদেন • {new Date(customer.lastDate).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' })}
+          {customer.count} লেনদেন • {new Date(customer.lastDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
         </p>
       </div>
 
       <div className="text-right">
         <p className={`font-black text-lg ${isPositive ? 'text-rose-600' : 'text-emerald-600'}`}>
-          ৳ {Math.abs(customer.balance).toLocaleString()}
+          € {Math.abs(customer.balance).toLocaleString()}
         </p>
         <div className="flex justify-end">
            <div className="bg-slate-100 group-hover:bg-emerald-50 p-1.5 rounded-lg transition-colors">

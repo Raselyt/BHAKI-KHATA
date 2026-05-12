@@ -39,7 +39,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, o
           <div className="flex justify-between items-start gap-2">
             <h3 className="font-black text-slate-800 truncate text-lg">{transaction.name}</h3>
             <span className={`font-black text-xl shrink-0 ${isJoma ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {isJoma ? '+' : '-'} ৳ {transaction.amount.toLocaleString()}
+              {isJoma ? '+' : '-'} € {transaction.amount.toLocaleString()}
             </span>
           </div>
           
@@ -52,7 +52,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, o
                     {transaction.type}
                 </span>
                 <span className="text-[10px] text-slate-400 font-bold">
-                  {new Date(transaction.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  {new Date(transaction.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </span>
               </div>
               {transaction.note && <p className="text-[10px] text-slate-500 mt-1 italic font-medium truncate"># {transaction.note}</p>}

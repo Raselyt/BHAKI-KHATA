@@ -69,7 +69,7 @@ export const ManualAddModal: React.FC<ManualAddModalProps> = ({ isOpen, onClose,
 
             {/* Amount Input */}
             <div className="relative">
-              <div className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-400">৳</div>
+              <div className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-400">€</div>
               <input 
                 type="number"
                 value={amount}

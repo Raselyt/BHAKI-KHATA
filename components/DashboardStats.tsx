@@ -14,7 +14,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
         <div className="relative z-10 text-white">
           <p className="text-[10px] text-indigo-100 font-black mb-1 uppercase tracking-[0.2em] opacity-80">বর্তমানে মোট পাওনা আছে</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black">৳</span>
+            <span className="text-3xl font-black">€</span>
             <span className="text-5xl font-black tracking-tighter leading-tight">
               {stats.totalRemaining.toLocaleString()}
             </span>
@@ -34,7 +34,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
            <p className="text-[10px] text-rose-600 font-black uppercase tracking-widest">মোট বাকি দিয়েছি</p>
         </div>
-        <p className="text-2xl font-black text-rose-700 leading-none">৳ {stats.totalGiven.toLocaleString()}</p>
+        <p className="text-2xl font-black text-rose-700 leading-none">€ {stats.totalGiven.toLocaleString()}</p>
       </div>
 
       {/* Total Received Card */}
@@ -43,7 +43,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">মোট ফেরত পেয়েছি</p>
         </div>
-        <p className="text-2xl font-black text-emerald-700 leading-none">৳ {stats.totalReceived.toLocaleString()}</p>
+        <p className="text-2xl font-black text-emerald-700 leading-none">€ {stats.totalReceived.toLocaleString()}</p>
       </div>
     </div>
   );

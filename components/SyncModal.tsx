@@ -68,7 +68,7 @@ export const SyncModal: React.FC<SyncModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `baki_khata_backup_${new Date().toLocaleDateString('bn-BD').replace(/\//g, '-')}.json`;
+    link.download = `baki_khata_backup_${new Date().toLocaleDateString('it-IT').replace(/\//g, '-')}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
