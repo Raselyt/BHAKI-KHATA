@@ -22,6 +22,18 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
   const [copyStatus, setCopyStatus] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Stats calculations for this customer
+  const totalBaki = transactions
+    .filter(t => t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalJoma = transactions
+    .filter(t => t.type === TransactionType.BKASH_JOMA || t.type === TransactionType.CASH_PAYMENT)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const lastPayment = transactions
+    .find(t => t.type === TransactionType.BKASH_JOMA || t.type === TransactionType.CASH_PAYMENT);
+
   // Generate Message Text
   const generateMessage = () => {
     const bakiNotes = transactions
@@ -120,9 +132,37 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
 
       {/* Customer Stats Card */}
       <div className="bg-[#0f172a] p-8 rounded-[2.5rem] text-white mb-8 shadow-2xl relative overflow-hidden">
-        <div className="relative z-10">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">মোট পাওনা</p>
-          <p className="text-4xl font-black mb-6">€ {balance.toLocaleString()}</p>
+        <div className="relative z-10 select-none">
+          {/* Main Stats Row */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-300 mb-1">বর্তমানে পাওনা</p>
+              <p className="text-3xl font-black text-rose-400">€ {balance.toLocaleString()}</p>
+            </div>
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-1">সর্বশেষ জমা</p>
+                <p className="text-2xl font-black text-indigo-400">
+                  {lastPayment ? `€ ${lastPayment.amount.toLocaleString()}` : '€ 0'}
+                </p>
+              </div>
+              <p className="text-[10px] font-bold text-indigo-200">
+                {lastPayment ? `তারিখ: ${new Date(lastPayment.date).toLocaleDateString('it-IT')}` : 'কোনো জমা নেই'}
+              </p>
+            </div>
+          </div>
+
+          {/* Mini Supportive Stats */}
+          <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4 mb-6 text-sm">
+            <div className="pl-2">
+              <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider mb-0.5">মোট বাকি দেওয়া হয়েছে</span>
+              <span className="text-md font-extrabold text-rose-300">€ {totalBaki.toLocaleString()}</span>
+            </div>
+            <div className="pl-2 border-l border-white/5">
+              <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider mb-0.5">মোট জমা দেওয়া হয়েছে</span>
+              <span className="text-md font-extrabold text-emerald-300">€ {totalJoma.toLocaleString()}</span>
+            </div>
+          </div>
           
           <div className="flex gap-3">
             <button 
@@ -291,9 +331,28 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
           </div>
         </div>
 
-        <div style={{ border: '2px solid #f1f5f9', borderRadius: '15px', padding: '20px', marginBottom: '30px' }}>
-          <p style={{ margin: '0 0 5px', fontSize: '14px', color: '#64748b', fontWeight: 'bold' }}>মোট বকেয়া (Balance)</p>
-          <p style={{ margin: '0', fontSize: '36px', fontWeight: '900', color: '#e11d48' }}>€ {balance.toLocaleString('it-IT')}</p>
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
+          <div style={{ flex: '1', border: '1px solid #fee2e2', borderRadius: '15px', padding: '15px', backgroundColor: '#fff1f2', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 6px', fontSize: '11px', color: '#be123c', fontWeight: 'bold' }}>বর্তমানে পাওনা</p>
+            <p style={{ margin: '0', fontSize: '20px', fontWeight: '900', color: '#e11d48' }}>€ {balance.toLocaleString('it-IT')}</p>
+          </div>
+          <div style={{ flex: '1', border: '1px solid #e0e7ff', borderRadius: '15px', padding: '15px', backgroundColor: '#eef2ff', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <p style={{ margin: '0 0 6px', fontSize: '11px', color: '#3730a3', fontWeight: 'bold' }}>সর্বশেষ জমা</p>
+            <p style={{ margin: '0', fontSize: '18px', fontWeight: '900', color: '#4f46e5' }}>
+              € {lastPayment ? lastPayment.amount.toLocaleString('it-IT') : '0'}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: '9px', color: '#6366f1' }}>
+              {lastPayment ? new Date(lastPayment.date).toLocaleDateString('it-IT') : 'কোনো জমা নেই'}
+            </p>
+          </div>
+          <div style={{ flex: '1', border: '1px solid #fee2e2', borderRadius: '15px', padding: '15px', backgroundColor: '#fff5f5', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 6px', fontSize: '11px', color: '#991b1b', fontWeight: 'bold' }}>মোট বাকি দেওয়া</p>
+            <p style={{ margin: '0', fontSize: '20px', fontWeight: '900', color: '#dc2626' }}>€ {totalBaki.toLocaleString('it-IT')}</p>
+          </div>
+          <div style={{ flex: '1', border: '1px solid #dcfce7', borderRadius: '15px', padding: '15px', backgroundColor: '#f0fdf4', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 6px', fontSize: '11px', color: '#166534', fontWeight: 'bold' }}>মোট জমা পাওয়া</p>
+            <p style={{ margin: '0', fontSize: '20px', fontWeight: '900', color: '#10b981' }}>€ {totalJoma.toLocaleString('it-IT')}</p>
+          </div>
         </div>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', borderRadius: '10px', overflow: 'hidden' }}>
