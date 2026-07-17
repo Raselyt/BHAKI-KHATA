@@ -273,27 +273,27 @@ const App: React.FC = () => {
       )}
 
       {/* Main Ledger Mode Switcher */}
-      <div className="mb-6 flex bg-[#f1f5f9] p-1.5 rounded-[2rem] border border-slate-200 shadow-sm sticky top-[72px] bg-white/95 backdrop-blur-md z-[45]">
+      <div className="mb-5 flex bg-slate-100 p-1 rounded-full border border-slate-200/60 shadow-sm">
         <button 
           onClick={() => setCurrentMode('baki')}
-          className={`flex-1 py-4 text-xs font-black rounded-[1.8rem] transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 text-xs font-bold rounded-full transition-all flex items-center justify-center gap-1.5 ${
             currentMode === 'baki' 
-              ? 'bg-[#0f172a] text-white shadow-lg' 
+              ? 'bg-[#0f172a] text-white shadow-sm' 
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 20H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 20H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           বকেয়া খাতা (Credit)
         </button>
         <button 
           onClick={() => setCurrentMode('holding')}
-          className={`flex-1 py-4 text-xs font-black rounded-[1.8rem] transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 text-xs font-bold rounded-full transition-all flex items-center justify-center gap-1.5 ${
             currentMode === 'holding' 
-              ? 'bg-amber-600 text-white shadow-lg' 
+              ? 'bg-amber-600 text-white shadow-sm' 
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           আমানত খাতা (Deposit)
         </button>
       </div>
@@ -305,7 +305,7 @@ const App: React.FC = () => {
           <DashboardStats stats={stats} />
           <SmartAddInput onParsed={handleAddTransaction} />
 
-          <div className="sticky top-[152px] bg-white/90 backdrop-blur-md z-40 py-2 border-b border-slate-50">
+          <div className="py-2 border-b border-slate-50">
              <div className="relative">
                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
