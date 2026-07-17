@@ -20,6 +20,12 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+
+  // Partial pay/release modal states
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedPayItem, setSelectedPayItem] = useState<HoldingTransaction | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payNote, setPayNote] = useState('');
   
   // Selected entry for detailed view or action
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -130,21 +136,81 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
     setIsAddModalOpen(false);
   };
 
-  const handleMarkAsCompleted = async (id: string) => {
-    if (!confirm("আপনি কি নিশ্চিতভাবে এই আমানতটি পরিশোধিত/কমপ্লিট হিসেবে চিহ্নিত করতে চান?")) return;
-    
-    const updated = holdings.map(h => {
-      if (h.id === id) {
-        return {
-          ...h,
-          status: 'completed' as const,
-          completedDate: new Date().toISOString()
-        };
-      }
-      return h;
-    });
+  const handleReleasePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPayItem) return;
+
+    const amountToPay = parseFloat(payAmount);
+    if (isNaN(amountToPay) || amountToPay <= 0) {
+      alert("পরিশোধের পরিমাণ সঠিক নয়!");
+      return;
+    }
+
+    if (amountToPay > selectedPayItem.amount) {
+      alert(`পরিশোধের পরিমাণ মোট জমার (€ ${selectedPayItem.amount}) চেয়ে বেশি হতে পারবে না!`);
+      return;
+    }
+
+    const isFullPayment = amountToPay === selectedPayItem.amount;
+    let updated: HoldingTransaction[] = [];
+
+    const confirmMsg = isFullPayment
+      ? `আপনি কি সম্পূর্ণ € ${amountToPay.toLocaleString('it-IT')} পরিশোধিত/কমপ্লিট হিসেবে চিহ্নিত করতে চান?`
+      : `আপনি কি আংশিক € ${amountToPay.toLocaleString('it-IT')} পরিশোধ করতে চান? (অবশিষ্ট জমা থাকবে € ${(selectedPayItem.amount - amountToPay).toLocaleString('it-IT')})`;
+
+    if (!confirm(confirmMsg)) return;
+
+    if (isFullPayment) {
+      // Mark original as completed
+      updated = holdings.map(h => {
+        if (h.id === selectedPayItem.id) {
+          return {
+            ...h,
+            status: 'completed' as const,
+            completedDate: new Date().toISOString(),
+            note: payNote.trim() ? payNote.trim() : h.note
+          };
+        }
+        return h;
+      });
+    } else {
+      // Partial payment
+      // 1. Create a new completed transaction for the paid/released portion
+      const paidEntry: HoldingTransaction = {
+        id: `holding-comp-${Date.now()}`,
+        name: selectedPayItem.name,
+        phone: selectedPayItem.phone,
+        amount: amountToPay,
+        note: `${payNote.trim() || 'আংশিক পরিশোধ'} (মূল জমা €${selectedPayItem.amount} থেকে আংশিক পরিশোধিত)`,
+        status: 'completed',
+        date: selectedPayItem.date, // keep original deposit date
+        completedDate: new Date().toISOString()
+      };
+
+      // 2. Reduce the original active transaction's amount by the paid portion
+      updated = holdings.map(h => {
+        if (h.id === selectedPayItem.id) {
+          const newAmount = h.amount - amountToPay;
+          const currentNote = h.note || '';
+          const addition = `[€${amountToPay} পরিশোধিত - ${new Date().toLocaleDateString('it-IT')}]`;
+          return {
+            ...h,
+            amount: newAmount,
+            note: currentNote ? `${currentNote} ${addition}` : addition
+          };
+        }
+        return h;
+      });
+
+      // Insert the paid portion
+      updated = [paidEntry, ...updated];
+    }
 
     await saveHoldings(updated);
+    setIsPayModalOpen(false);
+    setSelectedPayItem(null);
+    setPayAmount('');
+    setPayNote('');
   };
 
   const handleDeleteHolding = async (id: string) => {
@@ -528,11 +594,16 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
                     <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 pt-2">
                       {item.status === 'holding' && (
                         <button
-                          onClick={() => handleMarkAsCompleted(item.id)}
+                          onClick={() => {
+                            setSelectedPayItem(item);
+                            setPayAmount(item.amount.toString());
+                            setPayNote('');
+                            setIsPayModalOpen(true);
+                          }}
                           className="col-span-2 sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-3 px-4 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                          পরিশোধিত চিহ্নিত করুন
+                          পরিশোধ / রিলিজ করুন
                         </button>
                       )}
 
@@ -647,6 +718,94 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
               >
                 আমানত জমা করুন 📥
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Release Payment / Partial Payment Modal */}
+      {isPayModalOpen && selectedPayItem && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setIsPayModalOpen(false); setSelectedPayItem(null); }} />
+          
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 relative z-10 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <button 
+              onClick={() => { setIsPayModalOpen(false); setSelectedPayItem(null); }}
+              className="absolute right-6 top-6 w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500 transition-colors active:scale-90"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+
+            <h3 className="text-xl font-black text-slate-800 mb-1">আমানত পরিশোধ / স্থানান্তর</h3>
+            <p className="text-xs text-slate-400 font-bold mb-4">আংশিক বা সম্পূর্ণ টাকা পরিশোধ ও পাঠানোর হিসাব রাখুন</p>
+
+            <div className="bg-amber-50 border border-amber-100/50 p-4 rounded-2xl mb-5 text-xs text-amber-800 font-bold">
+              <span className="text-[10px] text-amber-600 block mb-0.5">আমানতকারী:</span>
+              <span className="text-sm text-slate-800 font-black block mb-2">{selectedPayItem.name}</span>
+              <div className="flex justify-between items-center text-slate-700">
+                <span>বর্তমানে মোট জমা আছে:</span>
+                <span className="text-base text-amber-700 font-black">€ {selectedPayItem.amount.toLocaleString('it-IT')}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleReleasePayment} className="space-y-4">
+              {/* Pay Amount */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">পরিশোধের পরিমাণ (€) *</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">€</span>
+                  <input 
+                    type="number" 
+                    required
+                    min="0.01"
+                    max={selectedPayItem.amount}
+                    step="any"
+                    placeholder={`যেমন: ${selectedPayItem.amount}`}
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className="w-full p-4 pl-10 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm"
+                  />
+                </div>
+                <div className="mt-1.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPayAmount(selectedPayItem.amount.toString())}
+                    className="text-[10px] text-indigo-600 font-black uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition-colors"
+                  >
+                    সম্পূর্ণ পরিশোধ (€ {selectedPayItem.amount})
+                  </button>
+                  {selectedPayItem.amount > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPayAmount((selectedPayItem.amount / 2).toFixed(2).toString())}
+                      className="text-[10px] text-amber-600 font-black uppercase tracking-wider bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors"
+                    >
+                      অর্ধেক পরিশোধ (€ {(selectedPayItem.amount / 2).toFixed(2)})
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Pay Note */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">বিশেষ মন্তব্য (যেমন: বাংলাদেশ বিকাশ / ক্যাশ ফেরত)</label>
+                <textarea 
+                  placeholder="যেমন: শরীফের কাছে পাঠানো হলো"
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  rows={2}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm resize-none"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  type="submit"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-5 rounded-2xl font-black text-sm shadow-xl active:scale-[0.98] transition-all"
+                >
+                  {parseFloat(payAmount) === selectedPayItem.amount ? 'সম্পূর্ণ পরিশোধ সম্পন্ন করুন 💸' : 'আংশিক পরিশোধ নিশ্চিত করুন 💸'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
