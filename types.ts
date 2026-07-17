@@ -21,6 +21,17 @@ export interface Transaction {
   note?: string;
 }
 
+export interface HoldingTransaction {
+  id: string;
+  name: string;
+  amount: number;
+  date: string;
+  note?: string;
+  phone?: string;
+  status: 'holding' | 'completed';
+  completedDate?: string;
+}
+
 export interface DashboardStats {
   totalGiven: number;
   totalReceived: number;

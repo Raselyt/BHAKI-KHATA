@@ -11,6 +11,7 @@ import { CustomerCard } from './components/CustomerCard.tsx';
 import { CustomerFolder } from './components/CustomerFolder.tsx';
 import { ManualAddModal } from './components/ManualAddModal.tsx';
 import { Login } from './components/Login.tsx';
+import { HoldingLedger } from './components/HoldingLedger.tsx';
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -23,6 +24,7 @@ const App: React.FC = () => {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
+  const [currentMode, setCurrentMode] = useState<'baki' | 'holding'>('baki');
   
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -270,64 +272,96 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <DashboardStats stats={stats} />
-      <SmartAddInput onParsed={handleAddTransaction} />
-
-      <div className="sticky top-[72px] bg-white/90 backdrop-blur-md z-40 py-2 border-b border-slate-50">
-         <div className="relative">
-           <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
-             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-           </div>
-           <input 
-             type="text"
-             placeholder="নাম দিয়ে কাস্টমার খুঁজুন..."
-             value={searchQuery}
-             onChange={(e) => setSearchQuery(e.target.value)}
-             className="w-full p-5 pl-12 bg-slate-50 border-2 border-slate-100 rounded-[2rem] focus:border-[#0f172a] focus:bg-white focus:outline-none transition-all font-bold text-sm"
-           />
-         </div>
-      </div>
-
-      <div className="mt-6 space-y-4 pb-48">
-        {customers.length === 0 ? (
-          <div className="py-20 text-center bg-slate-50 rounded-[3.5rem] border-2 border-dashed border-slate-200">
-            <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center mx-auto mb-5 shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </div>
-            <h3 className="text-slate-500 font-black text-lg mb-1">কোনো হিসাব পাওয়া যায়নি</h3>
-            <p className="text-slate-400 text-sm font-bold">নতুন হিসাব যোগ করতে নিচের বাটনটি ব্যবহার করুন</p>
-          </div>
-        ) : (
-          customers.map(customer => (
-            <CustomerCard 
-              key={customer.name}
-              customer={customer}
-              onClick={() => setSelectedCustomer(customer.name)}
-            />
-          ))
-        )}
-      </div>
-
-      {/* Floating Action Bar */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-[100] animate-in slide-in-from-bottom-12 duration-700">
+      {/* Main Ledger Mode Switcher */}
+      <div className="mb-6 flex bg-[#f1f5f9] p-1.5 rounded-[2rem] border border-slate-200 shadow-sm sticky top-[72px] bg-white/95 backdrop-blur-md z-[45]">
         <button 
-          onClick={() => setIsManualAddOpen(true)}
-          className="w-full bg-[#0f172a] text-white p-1.5 pr-2 rounded-[2.8rem] shadow-[0_25px_50px_-12px_rgba(15,23,42,0.5)] flex items-center justify-between group active:scale-[0.96] transition-all border border-white/10"
+          onClick={() => setCurrentMode('baki')}
+          className={`flex-1 py-4 text-xs font-black rounded-[1.8rem] transition-all flex items-center justify-center gap-2 ${
+            currentMode === 'baki' 
+              ? 'bg-[#0f172a] text-white shadow-lg' 
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
         >
-          <div className="flex items-center gap-4 pl-4">
-            <div className="w-12 h-12 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg group-hover:rotate-180 transition-transform duration-700">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-            </div>
-            <div className="text-left">
-              <span className="block font-black text-lg leading-none mb-0.5">নতুন হিসাব যোগ করুন</span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">বাকি বা জমার রেকর্ড</span>
-            </div>
-          </div>
-          <div className="bg-white/10 w-12 h-12 rounded-full flex items-center justify-center transition-colors group-hover:bg-white/20">
-             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 20H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          বকেয়া খাতা (Credit)
+        </button>
+        <button 
+          onClick={() => setCurrentMode('holding')}
+          className={`flex-1 py-4 text-xs font-black rounded-[1.8rem] transition-all flex items-center justify-center gap-2 ${
+            currentMode === 'holding' 
+              ? 'bg-amber-600 text-white shadow-lg' 
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          আমানত খাতা (Deposit)
         </button>
       </div>
+
+      {currentMode === 'holding' ? (
+        <HoldingLedger userId={userId} />
+      ) : (
+        <>
+          <DashboardStats stats={stats} />
+          <SmartAddInput onParsed={handleAddTransaction} />
+
+          <div className="sticky top-[152px] bg-white/90 backdrop-blur-md z-40 py-2 border-b border-slate-50">
+             <div className="relative">
+               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+               </div>
+               <input 
+                 type="text"
+                 placeholder="নাম দিয়ে কাস্টমার খুঁজুন..."
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 className="w-full p-5 pl-12 bg-slate-50 border-2 border-slate-100 rounded-[2rem] focus:border-[#0f172a] focus:bg-white focus:outline-none transition-all font-bold text-sm"
+               />
+             </div>
+          </div>
+
+          <div className="mt-6 space-y-4 pb-48">
+            {customers.length === 0 ? (
+              <div className="py-20 text-center bg-slate-50 rounded-[3.5rem] border-2 border-dashed border-slate-200">
+                <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center mx-auto mb-5 shadow-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <h3 className="text-slate-500 font-black text-lg mb-1">কোনো হিসাব পাওয়া যায়নি</h3>
+                <p className="text-slate-400 text-sm font-bold">নতুন হিসাব যোগ করতে নিচের বাটনটি ব্যবহার করুন</p>
+              </div>
+            ) : (
+              customers.map(customer => (
+                <CustomerCard 
+                  key={customer.name}
+                  customer={customer}
+                  onClick={() => setSelectedCustomer(customer.name)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Floating Action Bar */}
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-[100] animate-in slide-in-from-bottom-12 duration-700">
+            <button 
+              onClick={() => setIsManualAddOpen(true)}
+              className="w-full bg-[#0f172a] text-white p-1.5 pr-2 rounded-[2.8rem] shadow-[0_25px_50px_-12px_rgba(15,23,42,0.5)] flex items-center justify-between group active:scale-[0.96] transition-all border border-white/10"
+            >
+              <div className="flex items-center gap-4 pl-4">
+                <div className="w-12 h-12 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg group-hover:rotate-180 transition-transform duration-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                </div>
+                <div className="text-left">
+                  <span className="block font-black text-lg leading-none mb-0.5">নতুন হিসাব যোগ করুন</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">বাকি বা জমার রেকর্ড</span>
+                </div>
+              </div>
+              <div className="bg-white/10 w-12 h-12 rounded-full flex items-center justify-center transition-colors group-hover:bg-white/20">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
+            </button>
+          </div>
+        </>
+      )}
     </Layout>
   );
 };
