@@ -26,6 +26,14 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
   const [selectedPayItem, setSelectedPayItem] = useState<HoldingTransaction | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
+
+  // Edit modal states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedEditItem, setSelectedEditItem] = useState<HoldingTransaction | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editNote, setEditNote] = useState('');
   
   // Selected entry for detailed view or action
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -211,6 +219,36 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
     setSelectedPayItem(null);
     setPayAmount('');
     setPayNote('');
+  };
+
+  const handleEditHolding = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEditItem) return;
+    if (!editName || !editAmount) {
+      alert("নাম এবং টাকার পরিমাণ আবশ্যক!");
+      return;
+    }
+
+    const updated = holdings.map(h => {
+      if (h.id === selectedEditItem.id) {
+        return {
+          ...h,
+          name: editName.trim(),
+          phone: editPhone.trim() || undefined,
+          amount: parseFloat(editAmount),
+          note: editNote.trim() || undefined,
+        };
+      }
+      return h;
+    });
+
+    await saveHoldings(updated);
+    setIsEditModalOpen(false);
+    setSelectedEditItem(null);
+    setEditName('');
+    setEditPhone('');
+    setEditAmount('');
+    setEditNote('');
   };
 
   const handleDeleteHolding = async (id: string) => {
@@ -412,6 +450,8 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
     };
 
     try {
+      // @ts-ignore - html2pdf is imported dynamically
+      const html2pdf = (await import('html2pdf.js')).default;
       element.style.display = 'block';
       await new Promise(resolve => setTimeout(resolve, 500));
       await html2pdf().set(opt).from(element).save();
@@ -625,6 +665,21 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
                       </button>
 
                       <button
+                        onClick={() => {
+                          setSelectedEditItem(item);
+                          setEditName(item.name);
+                          setEditPhone(item.phone || '');
+                          setEditAmount(item.amount.toString());
+                          setEditNote(item.note || '');
+                          setIsEditModalOpen(true);
+                        }}
+                        className="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-black py-3 px-3 rounded-xl shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                        এডিট
+                      </button>
+
+                      <button
                         onClick={() => handleDeleteHolding(item.id)}
                         className="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-black py-3 px-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
                       >
@@ -804,6 +859,91 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-5 rounded-2xl font-black text-sm shadow-xl active:scale-[0.98] transition-all"
                 >
                   {parseFloat(payAmount) === selectedPayItem.amount ? 'সম্পূর্ণ পরিশোধ সম্পন্ন করুন 💸' : 'আংশিক পরিশোধ নিশ্চিত করুন 💸'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Entry Modal */}
+      {isEditModalOpen && selectedEditItem && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-fade-in">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setIsEditModalOpen(false); setSelectedEditItem(null); }} />
+          
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 relative z-10 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <button 
+              onClick={() => { setIsEditModalOpen(false); setSelectedEditItem(null); }}
+              className="absolute right-6 top-6 w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500 transition-colors active:scale-90"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+
+            <h3 className="text-xl font-black text-slate-800 mb-1">আমানত তথ্য এডিট করুন ✏️</h3>
+            <p className="text-xs text-slate-400 font-bold mb-5">কোনো ভুল তথ্য থাকলে তা সংশোধন করে নিন</p>
+
+            <form onSubmit={handleEditHolding} className="space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">আমানতকারীর নাম *</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="যেমন: শরীফ আহমেদ"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">মোবাইল নম্বর (ঐচ্ছিক)</label>
+                <input 
+                  type="tel" 
+                  placeholder="যেমন: +393280000000"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm"
+                />
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">আমানতের পরিমাণ (€) *</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">€</span>
+                  <input 
+                    type="number" 
+                    required
+                    min="0.01"
+                    step="any"
+                    placeholder="যেমন: 500"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="w-full p-4 pl-10 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">বিশেষ মন্তব্য / বিবরণ</label>
+                <textarea 
+                  placeholder="যেমন: বাংলাদেশ ১ মাস পরে পাঠাবে"
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  rows={2}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm resize-none"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  type="submit"
+                  className="w-full bg-[#0f172a] hover:bg-slate-800 text-white p-5 rounded-2xl font-black text-sm shadow-xl active:scale-[0.98] transition-all"
+                >
+                  পরিবর্তন সেভ করুন 💾
                 </button>
               </div>
             </form>
