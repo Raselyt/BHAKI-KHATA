@@ -34,6 +34,12 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
   const [editPhone, setEditPhone] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editNote, setEditNote] = useState('');
+
+  // Add more money modal states
+  const [isAddMoneyModalOpen, setIsAddMoneyModalOpen] = useState(false);
+  const [selectedAddMoneyItem, setSelectedAddMoneyItem] = useState<HoldingTransaction | null>(null);
+  const [addMoneyAmount, setAddMoneyAmount] = useState('');
+  const [addMoneyNote, setAddMoneyNote] = useState('');
   
   // Selected entry for detailed view or action
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -249,6 +255,43 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
     setEditPhone('');
     setEditAmount('');
     setEditNote('');
+  };
+
+  const handleAddMoreMoney = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAddMoneyItem) return;
+
+    const amountToAdd = parseFloat(addMoneyAmount);
+    if (isNaN(amountToAdd) || amountToAdd <= 0) {
+      alert("জমার পরিমাণ সঠিক নয়!");
+      return;
+    }
+
+    const newAmount = selectedAddMoneyItem.amount + amountToAdd;
+    const confirmMsg = `আপনি কি ${selectedAddMoneyItem.name}-এর হিসাবে আরও € ${amountToAdd.toLocaleString('it-IT')} যুক্ত করতে চান?\n\nপূর্বের জমা: € ${selectedAddMoneyItem.amount.toLocaleString('it-IT')}\nনতুন জমা: € ${newAmount.toLocaleString('it-IT')}`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const updated = holdings.map(h => {
+      if (h.id === selectedAddMoneyItem.id) {
+        const currentNote = h.note || '';
+        const dateStr = new Date().toLocaleDateString('it-IT');
+        const customNotePart = addMoneyNote.trim() ? ` (${addMoneyNote.trim()})` : '';
+        const addition = `[€${amountToAdd} অতিরিক্ত জমা${customNotePart} - ${dateStr}]`;
+        return {
+          ...h,
+          amount: newAmount,
+          note: currentNote ? `${currentNote} ${addition}` : addition
+        };
+      }
+      return h;
+    });
+
+    await saveHoldings(updated);
+    setIsAddMoneyModalOpen(false);
+    setSelectedAddMoneyItem(null);
+    setAddMoneyAmount('');
+    setAddMoneyNote('');
   };
 
   const handleDeleteHolding = async (id: string) => {
@@ -633,18 +676,33 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
                     {/* Operation Bar */}
                     <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 pt-2">
                       {item.status === 'holding' && (
-                        <button
-                          onClick={() => {
-                            setSelectedPayItem(item);
-                            setPayAmount(item.amount.toString());
-                            setPayNote('');
-                            setIsPayModalOpen(true);
-                          }}
-                          className="col-span-2 sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-3 px-4 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                          পরিশোধ / রিলিজ করুন
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedPayItem(item);
+                              setPayAmount(item.amount.toString());
+                              setPayNote('');
+                              setIsPayModalOpen(true);
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-3 px-3 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 sm:flex-1"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            পরিশোধ / রিলিজ
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setSelectedAddMoneyItem(item);
+                              setAddMoneyAmount('');
+                              setAddMoneyNote('');
+                              setIsAddMoneyModalOpen(true);
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black py-3 px-3 rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 sm:flex-1"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            আরও জমা করুন
+                          </button>
+                        </>
                       )}
 
                       <button
@@ -944,6 +1002,96 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
                   className="w-full bg-[#0f172a] hover:bg-slate-800 text-white p-5 rounded-2xl font-black text-sm shadow-xl active:scale-[0.98] transition-all"
                 >
                   পরিবর্তন সেভ করুন 💾
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add More Money (Deposit More) Modal */}
+      {isAddMoneyModalOpen && selectedAddMoneyItem && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-fade-in">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setIsAddMoneyModalOpen(false); setSelectedAddMoneyItem(null); }} />
+          
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 relative z-10 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <button 
+              onClick={() => { setIsAddMoneyModalOpen(false); setSelectedAddMoneyItem(null); }}
+              className="absolute right-6 top-6 w-9 h-9 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500 transition-colors active:scale-90"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+
+            <h3 className="text-xl font-black text-slate-800 mb-1">অতিরিক্ত আমানত জমা করুন 💰</h3>
+            <p className="text-xs text-slate-400 font-bold mb-4">বর্তমান আমানতকারীর হিসাবে আরও টাকা জমা করুন</p>
+
+            <div className="bg-indigo-50 border border-indigo-100/50 p-4 rounded-2xl mb-5 text-xs text-indigo-800 font-bold">
+              <span className="text-[10px] text-indigo-600 block mb-0.5">আমানতকারী:</span>
+              <span className="text-sm text-slate-800 font-black block mb-2">{selectedAddMoneyItem.name}</span>
+              <div className="flex justify-between items-center text-slate-700">
+                <span>বর্তমানে মোট জমা আছে:</span>
+                <span className="text-base text-indigo-700 font-black">€ {selectedAddMoneyItem.amount.toLocaleString('it-IT')}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleAddMoreMoney} className="space-y-4">
+              {/* Add Amount */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">নতুন জমার পরিমাণ (€) *</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">€</span>
+                  <input 
+                    type="number" 
+                    required
+                    min="0.01"
+                    step="any"
+                    placeholder="যেমন: 500"
+                    value={addMoneyAmount}
+                    onChange={(e) => setAddMoneyAmount(e.target.value)}
+                    className="w-full p-4 pl-10 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm"
+                  />
+                </div>
+                {/* Shortcut quick additions */}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[50, 100, 200, 500, 1000].map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setAddMoneyAmount(val.toString())}
+                      className="text-[10px] text-indigo-700 font-black bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-all active:scale-95"
+                    >
+                      +€{val}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">বিশেষ মন্তব্য / বিবরণ (ঐচ্ছিক)</label>
+                <textarea 
+                  placeholder="যেমন: ক্যাশ জমা দিলেন"
+                  value={addMoneyNote}
+                  onChange={(e) => setAddMoneyNote(e.target.value)}
+                  rows={2}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm resize-none"
+                />
+              </div>
+
+              {/* New projected balance */}
+              {addMoneyAmount && !isNaN(parseFloat(addMoneyAmount)) && parseFloat(addMoneyAmount) > 0 && (
+                <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center text-xs text-slate-600 font-bold border border-slate-100">
+                  <span>নতুন মোট ব্যালেন্স হবে:</span>
+                  <span className="text-sm text-slate-800 font-black">€ {(selectedAddMoneyItem.amount + parseFloat(addMoneyAmount)).toLocaleString('it-IT')}</span>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button 
+                  type="submit"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-5 rounded-2xl font-black text-sm shadow-xl active:scale-[0.98] transition-all"
+                >
+                  নতুন জমা যুক্ত করুন 💰
                 </button>
               </div>
             </form>
