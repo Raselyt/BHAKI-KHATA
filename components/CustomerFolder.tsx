@@ -17,6 +17,8 @@ interface CustomerFolderProps {
 export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, phone, shopName, transactions, onBack, onAdd, onDelete }) => {
   const [showAddModal, setShowAddModal] = useState<{ type: TransactionType } | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [msgType, setMsgType] = useState<'reminder' | 'thankyou' | 'statement'>('reminder');
+  const [customMessage, setCustomMessage] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [copyStatus, setCopyStatus] = useState(false);
@@ -34,8 +36,23 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
   const lastPayment = transactions
     .find(t => t.type === TransactionType.BKASH_JOMA || t.type === TransactionType.CASH_PAYMENT);
 
-  // Generate Message Text
-  const generateMessage = () => {
+  // Generate Message Text based on type
+  const generateMessageText = (type: 'reminder' | 'thankyou' | 'statement', currentBalance = balance) => {
+    const shopSignature = shopName ? `\n\n— ${shopName}` : '';
+    
+    if (type === 'thankyou') {
+      if (currentBalance <= 0) {
+        return `আসসালামু আলাইকুম ${name},\nআপনার বাকি টাকা পরিশোধ করার জন্য আপনাকে অসংখ্য ধন্যবাদ! আপনার সাথে সততার সাথে লেনদেন করতে পেরে আমরা অত্যন্ত আনন্দিত। 🤝${shopSignature}`;
+      } else {
+        return `আসসালামু আলাইকুম ${name},\nআপনার বকেয়া টাকা জমা দেওয়ার জন্য আপনাকে অসংখ্য ধন্যবাদ! 🤝\nঅবশিষ্ট বকেয়া পরিমাণ: € ${currentBalance.toLocaleString('it-IT')}${shopSignature}`;
+      }
+    }
+
+    if (type === 'statement') {
+      return `আসসালামু আলাইকুম ${name},\nআপনার হিসাব বিবরণী:\n• মোট বাকি: € ${totalBaki.toLocaleString('it-IT')}\n• মোট জমা: € ${totalJoma.toLocaleString('it-IT')}\n• বর্তমান বাকি: € ${currentBalance.toLocaleString('it-IT')}\n\nধন্যবাদ।${shopSignature}`;
+    }
+
+    // Default: 'reminder'
     const bakiNotes = transactions
       .filter(t => (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) && t.note)
       .map(t => t.note?.trim())
@@ -44,28 +61,40 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
     const uniqueNotes = Array.from(new Set(bakiNotes)).slice(0, 5).join(', ');
     const reasonText = uniqueNotes ? ` (হিসাব: ${uniqueNotes})` : '';
     
-    return `আসসালামু আলাইকুম ${name}, আপনার কাছে বর্তমানে ${balance} ইউরো${reasonText} পাওনা আছে। দয়া করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`;
+    return `আসসালামু আলাইকুম ${name},\nআপনার কাছে বর্তমানে € ${currentBalance.toLocaleString('it-IT')}${reasonText} বকেয়া পাওনা আছে। দয়া করে পরিশোধ করার জন্য বিনীত অনুরোধ করা হলো। ধন্যবাদ।${shopSignature}`;
   };
 
-  const messageText = generateMessage();
+  const openMessageModal = (type: 'reminder' | 'thankyou' | 'statement' = balance <= 0 ? 'thankyou' : 'reminder') => {
+    setMsgType(type);
+    setCustomMessage(generateMessageText(type));
+    setShowMessageModal(true);
+  };
+
+  const handleMsgTypeChange = (type: 'reminder' | 'thankyou' | 'statement') => {
+    setMsgType(type);
+    setCustomMessage(generateMessageText(type));
+  };
+
+  const activeMessageText = customMessage || generateMessageText(msgType);
 
   const handleCopyMessage = () => {
-    navigator.clipboard.writeText(messageText);
+    navigator.clipboard.writeText(activeMessageText);
     setCopyStatus(true);
     setTimeout(() => setCopyStatus(false), 2000);
   };
 
   const handleWhatsApp = () => {
     let cleanPhone = phone || '';
-    if (cleanPhone && !cleanPhone.startsWith('88')) {
+    if (cleanPhone && !cleanPhone.startsWith('88') && !cleanPhone.startsWith('+')) {
       cleanPhone = '88' + cleanPhone;
     }
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`;
+    cleanPhone = cleanPhone.replace(/[^0-9+]/g, '');
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(activeMessageText)}`;
     window.open(url, '_blank');
   };
 
   const handleSMS = () => {
-    const url = `sms:${phone || ''}?body=${encodeURIComponent(messageText)}`;
+    const url = `sms:${phone || ''}?body=${encodeURIComponent(activeMessageText)}`;
     window.open(url, '_blank');
   };
 
@@ -108,16 +137,29 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
   };
 
   const handleQuickAdd = () => {
-    if (!amount || isNaN(Number(amount))) return;
+    const numAmount = Number(amount);
+    if (!amount || isNaN(numAmount) || numAmount <= 0) return;
+
+    const isPayment = showAddModal?.type === TransactionType.CASH_PAYMENT || showAddModal?.type === TransactionType.BKASH_JOMA;
+
     onAdd({
       name,
-      amount: Number(amount),
+      amount: numAmount,
       type: showAddModal!.type,
       note: note.trim()
     });
+
     setAmount('');
     setNote('');
     setShowAddModal(null);
+
+    // If money was received/paid, automatically open thank-you message modal with updated projected balance
+    if (isPayment) {
+      const newBal = Math.max(0, balance - numAmount);
+      setMsgType('thankyou');
+      setCustomMessage(generateMessageText('thankyou', newBal));
+      setShowMessageModal(true);
+    }
   };
 
   return (
@@ -164,18 +206,25 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
             </div>
           </div>
           
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <button 
-              onClick={() => setShowMessageModal(true)}
+              onClick={() => openMessageModal(balance <= 0 ? 'thankyou' : 'reminder')}
               className="flex-1 bg-indigo-500 hover:bg-indigo-600 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
               মেসেজ দিন
             </button>
             <button 
+              onClick={() => openMessageModal('thankyou')}
+              className="bg-emerald-500 hover:bg-emerald-600 px-4 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 shadow-lg transition-all active:scale-95 text-white"
+              title="ধন্যবাদ মেসেজ পাঠান"
+            >
+              <span>💚 ধন্যবাদ</span>
+            </button>
+            <button 
               disabled={isExporting}
               onClick={handleDownloadPDF}
-              className="w-14 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-all active:scale-95 border border-white/10 disabled:opacity-50"
+              className="w-12 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-all active:scale-95 border border-white/10 disabled:opacity-50"
             >
               {isExporting ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -185,7 +234,7 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
             </button>
             <button 
               onClick={() => window.open(`tel:${phone || ''}`)}
-              className="w-14 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-all active:scale-95 border border-white/10"
+              className="w-12 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-all active:scale-95 border border-white/10"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
             </button>
@@ -270,40 +319,72 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({ name, balance, p
       {showMessageModal && (
         <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMessageModal(false)} />
-          <div className="relative bg-white w-full max-w-md rounded-t-[3rem] sm:rounded-[3rem] p-8 shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-slate-800">রিমাইন্ডার মেসেজ</h3>
-              <button onClick={() => setShowMessageModal(false)} className="p-2 bg-slate-50 rounded-xl text-slate-400">
+          <div className="relative bg-white w-full max-w-md rounded-t-[3rem] sm:rounded-[3rem] p-6 sm:p-8 shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-xl font-black text-slate-800">মেসেজ পাঠান 💬</h3>
+                <p className="text-xs font-bold text-slate-400">{name}-এর জন্য বার্তা টেমপ্লেট</p>
+              </div>
+              <button onClick={() => setShowMessageModal(false)} className="p-2 bg-slate-100 rounded-xl text-slate-500 hover:bg-slate-200 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             </div>
 
-            <div className="bg-slate-50 p-5 rounded-3xl mb-8 border border-slate-100 relative group">
-              <p className="text-sm font-medium text-slate-700 leading-relaxed italic">
-                "{messageText}"
-              </p>
-              <button 
-                onClick={handleCopyMessage}
-                className={`absolute -bottom-4 right-4 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md ${copyStatus ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400 hover:text-indigo-500'}`}
+            {/* Template Selector Tabs */}
+            <div className="flex gap-1.5 p-1 bg-slate-100 rounded-2xl mb-4 text-xs font-black">
+              <button
+                onClick={() => handleMsgTypeChange('reminder')}
+                className={`flex-1 py-2.5 px-2 rounded-xl transition-all ${msgType === 'reminder' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                {copyStatus ? 'কপি হয়েছে!' : 'কপি করুন'}
+                🔴 বকেয়া তাগাদা
+              </button>
+              <button
+                onClick={() => handleMsgTypeChange('thankyou')}
+                className={`flex-1 py-2.5 px-2 rounded-xl transition-all ${msgType === 'thankyou' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                🟢 ধন্যবাদ
+              </button>
+              <button
+                onClick={() => handleMsgTypeChange('statement')}
+                className={`flex-1 py-2.5 px-2 rounded-xl transition-all ${msgType === 'statement' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                📋 বিবরণী
               </button>
             </div>
 
+            {/* Editable Message Box */}
+            <div className="bg-slate-50 p-4 rounded-2xl mb-6 border border-slate-200 relative">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">মেসেজের বিবরণ (সম্পাদনাযোগ্য):</span>
+                <button 
+                  onClick={handleCopyMessage}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${copyStatus ? 'bg-emerald-500 text-white' : 'bg-white text-slate-600 hover:text-indigo-600 border border-slate-200'}`}
+                >
+                  {copyStatus ? 'কপি হয়েছে!' : 'কপি করুন'}
+                </button>
+              </div>
+              <textarea 
+                rows={5}
+                value={activeMessageText}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                className="w-full bg-white p-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 outline-none focus:border-indigo-500 transition-all resize-none leading-relaxed"
+              />
+            </div>
+
             <div className="space-y-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-4">কোথায় পাঠাতে চান?</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-2">কোথায় পাঠাতে চান?</p>
               
               <button 
                 onClick={handleWhatsApp}
-                className="w-full bg-[#25D366] text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg shadow-emerald-100 active:scale-95 transition-all"
+                className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-100 active:scale-95 transition-all text-sm"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                WhatsApp-এ পাঠান
+                WhatsApp-এ মেসেজ পাঠান
               </button>
 
               <button 
                 onClick={handleSMS}
-                className="w-full bg-slate-800 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 shadow-lg active:scale-95 transition-all text-sm"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 সরাসরি SMS পাঠান
