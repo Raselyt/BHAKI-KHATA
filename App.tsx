@@ -29,6 +29,94 @@ const App: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [editingCustomerFromList, setEditingCustomerFromList] = useState<{ oldName: string; phone?: string } | null>(null);
+  const [listEditName, setListEditName] = useState('');
+  const [listEditPhone, setListEditPhone] = useState('');
+
+  useEffect(() => {
+    const savedPhones = localStorage.getItem('customerPhones');
+    if (savedPhones) {
+      try {
+        setCustomerPhones(JSON.parse(savedPhones));
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleRenameCustomer = async (oldName: string, newName: string, phone?: string) => {
+    const trimmedNew = newName.trim();
+    if (!trimmedNew) return;
+
+    // 1. Update customerPhones
+    const updatedPhones = { ...customerPhones };
+    if (phone !== undefined) {
+      updatedPhones[trimmedNew] = phone.trim();
+    }
+    if (oldName !== trimmedNew && updatedPhones[oldName]) {
+      delete updatedPhones[oldName];
+    }
+    setCustomerPhones(updatedPhones);
+    localStorage.setItem('customerPhones', JSON.stringify(updatedPhones));
+
+    // 2. Update transactions array where t.name === oldName
+    const updatedTransactions = transactions.map(t => {
+      if (t.name === oldName) {
+        return { ...t, name: trimmedNew };
+      }
+      return t;
+    });
+
+    setTransactions(updatedTransactions);
+    localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
+
+    // 3. Update Supabase
+    if (userId) {
+      try {
+        await supabase
+          .from('transactions')
+          .update({ name: trimmedNew })
+          .eq('user_id', userId)
+          .eq('name', oldName);
+        setSyncMessage("কাস্টমারের নাম আপডেট করা হয়েছে ✅");
+      } catch (e) {
+        setSyncMessage("অফলাইনে নাম আপডেট হলো ⚠️");
+      }
+      setTimeout(() => setSyncMessage(null), 3000);
+    }
+
+    // 4. Update selectedCustomer if currently opened
+    if (selectedCustomer === oldName) {
+      setSelectedCustomer(trimmedNew);
+    }
+  };
+
+  const handleEditTransaction = async (id: string, updatedData: { name: string; amount: number; note?: string; type?: TransactionType }) => {
+    const updatedTransactions = transactions.map(t => {
+      if (t.id === id) {
+        return {
+          ...t,
+          ...updatedData
+        };
+      }
+      return t;
+    });
+
+    setTransactions(updatedTransactions);
+    localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
+
+    if (userId && !id.startsWith('local-')) {
+      try {
+        await supabase
+          .from('transactions')
+          .update(updatedData)
+          .eq('id', id);
+        setSyncMessage("লেনদেন তথ্য আপডেট করা হয়েছে ✅");
+      } catch (e) {
+        setSyncMessage("অফলাইনে তথ্য সেভ হলো ⚠️");
+      }
+      setTimeout(() => setSyncMessage(null), 3000);
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -238,6 +326,8 @@ const App: React.FC = () => {
           onBack={() => setSelectedCustomer(null)}
           onAdd={handleAddTransaction}
           onDelete={handleDeleteTransaction}
+          onRenameCustomer={handleRenameCustomer}
+          onEditTransaction={handleEditTransaction}
         />
       </Layout>
     );
@@ -262,6 +352,76 @@ const App: React.FC = () => {
         onClose={() => setIsManualAddOpen(false)}
         onAdd={handleAddTransaction}
       />
+
+      {/* Edit Customer Modal From Main List */}
+      {editingCustomerFromList && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEditingCustomerFromList(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 z-10">
+            <div className="flex justify-between items-center mb-5">
+              <div>
+                <h3 className="text-xl font-black text-slate-800">কাস্টমারের নাম এডিট করুন ✏️</h3>
+                <p className="text-xs font-bold text-slate-400">ভুল নাম বা ফোন নম্বর সংশোধন করুন</p>
+              </div>
+              <button onClick={() => setEditingCustomerFromList(null)} className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!listEditName.trim()) {
+                  alert("কাস্টমারের সঠিক নাম লিখুন!");
+                  return;
+                }
+                handleRenameCustomer(editingCustomerFromList.oldName, listEditName.trim(), listEditPhone.trim());
+                setEditingCustomerFromList(null);
+              }} 
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">কাস্টমারের নাম *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="যেমন: জামাল হোসেন"
+                  value={listEditName}
+                  onChange={(e) => setListEditName(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">মোবাইল নম্বর (ঐচ্ছিক)</label>
+                <input 
+                  type="tel"
+                  placeholder="যেমন: 01700000000"
+                  value={listEditPhone}
+                  onChange={(e) => setListEditPhone(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all font-bold text-sm"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setEditingCustomerFromList(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 p-4 rounded-2xl font-black text-sm transition-all"
+                >
+                  বাতিল
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white p-4 rounded-2xl font-black text-sm shadow-xl transition-all"
+                >
+                  সেভ করুন ✅
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {syncMessage && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] animate-in fade-in slide-in-from-top-4 duration-300">
@@ -335,6 +495,11 @@ const App: React.FC = () => {
                   key={customer.name}
                   customer={customer}
                   onClick={() => setSelectedCustomer(customer.name)}
+                  onEditCustomer={(name, phone) => {
+                    setEditingCustomerFromList({ oldName: name, phone });
+                    setListEditName(name);
+                    setListEditPhone(phone || '');
+                  }}
                 />
               ))
             )}
