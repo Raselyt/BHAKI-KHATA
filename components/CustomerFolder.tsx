@@ -46,8 +46,8 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   const [settlePayType, setSettlePayType] = useState<TransactionType>(TransactionType.CASH_PAYMENT);
   const [settlePayNote, setSettlePayNote] = useState('');
 
-  // History tab filter: 'all' | 'due' | 'paid'
-  const [historyTab, setHistoryTab] = useState<'all' | 'due' | 'paid'>('all');
+  // History tab filter: 'due' | 'paid' | 'all' (default to 'due' so only unpaid dues show by default)
+  const [historyTab, setHistoryTab] = useState<'due' | 'paid' | 'all'>('due');
 
   const [msgType, setMsgType] = useState<'reminder' | 'thankyou' | 'statement'>('reminder');
   const [customMessage, setCustomMessage] = useState('');
@@ -55,6 +55,26 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   const [note, setNote] = useState('');
   const [copyStatus, setCopyStatus] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Check if a baki transaction is paid/settled
+  const isBakiSettled = (t: Transaction): boolean => {
+    if (t.type !== TransactionType.BAKI && t.type !== TransactionType.BKASH_BAKI) {
+      return false;
+    }
+    if (t.status === 'paid') return true;
+    if (t.note && (t.note.includes('[পরিশোধিত]') || t.note.includes('(পরিশোধিত)'))) return true;
+
+    // Check if there is an explicit payment transaction recorded that settles this baki
+    const rawNote = (t.note || '').trim().toLowerCase();
+    if (!rawNote) return false;
+
+    return transactions.some(p => {
+      const isPayment = p.type === TransactionType.CASH_PAYMENT || p.type === TransactionType.BKASH_JOMA;
+      if (!isPayment) return false;
+      const pNote = (p.note || '').toLowerCase();
+      return pNote.includes(rawNote) && pNote.includes('পরিশোধ') && p.amount === t.amount;
+    });
+  };
 
   // Stats calculations for this customer
   const totalBaki = transactions
@@ -68,17 +88,18 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   const lastPayment = transactions
     .find(t => t.type === TransactionType.BKASH_JOMA || t.type === TransactionType.CASH_PAYMENT);
 
-  // Active Unpaid / Partial Baki items (strictly excluding paid items)
-  const unpaidBakiItems = transactions.filter(t => 
-    (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) &&
-    t.status !== 'paid'
-  );
+  // Active Due items: ONLY baki transactions that are NOT settled
+  const unpaidBakiItems = transactions.filter(t => {
+    const isBaki = t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI;
+    return isBaki && !isBakiSettled(t);
+  });
 
-  // Paid items count
-  const paidItems = transactions.filter(t => 
-    (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) &&
-    t.status === 'paid'
-  );
+  // Paid items:
+  // All payment deposits + settled baki items
+  const paidItems = transactions.filter(t => {
+    const isPayment = t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
+    return isPayment || isBakiSettled(t);
+  });
 
   // Generate Message Text based on type
   const generateMessageText = (type: 'reminder' | 'thankyou' | 'statement', currentBalance = balance) => {
@@ -99,18 +120,14 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
     // Default: 'reminder'
     // ONLY include ACTIVE / UNPAID baki items!
     // Paid items are strictly omitted so past settled items NEVER appear in the message!
-    const activeDues = transactions.filter(t => 
-      (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) &&
-      t.status !== 'paid'
-    );
-
     let reasonSection = '';
-    if (activeDues.length > 0) {
-      const itemsList = activeDues.map(t => {
+    if (unpaidBakiItems.length > 0) {
+      const itemsList = unpaidBakiItems.map(t => {
         const remaining = Math.max(0, t.amount - (t.paidAmount || 0));
-        const cleanName = t.note?.replace(/\(অবশিষ্ট.*?\)/g, '')
+        const cleanName = (t.note || t.type)
           .replace(/\[.*?\]/g, '')
-          .trim() || t.type;
+          .replace(/\(.*?\)/g, '')
+          .trim();
         return `• ${cleanName}: € ${remaining.toLocaleString('it-IT')}`;
       }).join('\n');
       
@@ -417,14 +434,6 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
         
         <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl text-[11px] font-black self-start sm:self-auto">
           <button
-            onClick={() => setHistoryTab('all')}
-            className={`px-3 py-1.5 rounded-xl transition-all ${
-              historyTab === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            সব ({transactions.length})
-          </button>
-          <button
             onClick={() => setHistoryTab('due')}
             className={`px-3 py-1.5 rounded-xl transition-all ${
               historyTab === 'due' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
@@ -440,6 +449,14 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
           >
             পরিশোধিত ({paidItems.length})
           </button>
+          <button
+            onClick={() => setHistoryTab('all')}
+            className={`px-3 py-1.5 rounded-xl transition-all ${
+              historyTab === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            সব ({transactions.length})
+          </button>
         </div>
       </div>
 
@@ -447,27 +464,47 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
         {transactions
           .filter(t => {
             if (historyTab === 'due') {
-              return (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) && t.status !== 'paid';
+              const isBaki = t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI;
+              return isBaki && !isBakiSettled(t);
             }
             if (historyTab === 'paid') {
-              return t.status === 'paid' || t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
+              const isPayment = t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
+              return isPayment || isBakiSettled(t);
             }
             return true;
-          })
-          .map(t => (
-            <TransactionCard 
-              key={t.id} 
-              transaction={t} 
-              onDelete={onDelete} 
-              onEdit={(tx) => {
-                setEditingTx(tx);
-                setTxEditAmount(tx.amount.toString());
-                setTxEditNote(tx.note || '');
-              }}
-              onSettle={openSettleModal}
-              onClick={() => {}} 
-            />
-          ))}
+          }).length === 0 ? (
+            <div className="p-8 bg-slate-50 rounded-2xl text-center border-2 border-slate-100 text-slate-500 font-bold text-sm">
+              {historyTab === 'due' ? 'আলহামদুলিল্লাহ! কোনো বকেয়া বাকি নেই 🎉' : 'কোনো লেনদেন নেই'}
+            </div>
+          ) : (
+            transactions
+              .filter(t => {
+                if (historyTab === 'due') {
+                  const isBaki = t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI;
+                  return isBaki && !isBakiSettled(t);
+                }
+                if (historyTab === 'paid') {
+                  const isPayment = t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
+                  return isPayment || isBakiSettled(t);
+                }
+                return true;
+              })
+              .map(t => (
+                <TransactionCard 
+                  key={t.id} 
+                  transaction={t} 
+                  isSettled={isBakiSettled(t)}
+                  onDelete={onDelete} 
+                  onEdit={(tx) => {
+                    setEditingTx(tx);
+                    setTxEditAmount(tx.amount.toString());
+                    setTxEditNote(tx.note || '');
+                  }}
+                  onSettle={openSettleModal}
+                  onClick={() => {}} 
+                />
+              ))
+          )}
       </div>
 
       {/* Edit Customer Modal */}

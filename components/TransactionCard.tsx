@@ -8,14 +8,17 @@ interface TransactionCardProps {
   onEdit?: (transaction: Transaction) => void;
   onSettle?: (transaction: Transaction) => void;
   onClick: (transaction: Transaction) => void;
+  isSettled?: boolean;
 }
 
-export const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, onDelete, onEdit, onSettle, onClick }) => {
+export const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, onDelete, onEdit, onSettle, onClick, isSettled }) => {
   const isBkash = transaction.type.includes('বিকাশ');
   const isJoma = transaction.type === TransactionType.BKASH_JOMA || transaction.type === TransactionType.CASH_PAYMENT;
   const isBaki = transaction.type === TransactionType.BAKI || transaction.type === TransactionType.BKASH_BAKI;
-  const isPaid = transaction.status === 'paid';
-  const isPartial = transaction.status === 'partial';
+  const isPaid = transaction.status === 'paid' || 
+                 Boolean(isSettled) || 
+                 Boolean(transaction.note && (transaction.note.includes('[পরিশোধিত]') || transaction.note.includes('(পরিশোধিত)')));
+  const isPartial = transaction.status === 'partial' || Boolean(transaction.note && transaction.note.includes('[আংশিক পরিশোধ'));
   const remainingDue = Math.max(0, transaction.amount - (transaction.paidAmount || 0));
 
   return (

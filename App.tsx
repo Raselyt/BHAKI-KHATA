@@ -327,24 +327,32 @@ const App: React.FC = () => {
     const isFull = newPaidAmount >= bakiTx.amount;
     const newStatus: 'paid' | 'partial' = isFull ? 'paid' : 'partial';
 
+    // Update note with [পরিশোধিত] tag so it persists in Supabase's existing text note column
+    const baseNote = (bakiTx.note || bakiTx.type).replace(/\s*\[পরিশোধিত\]/g, '').replace(/\s*\[আংশিক পরিশোধ.*?\]/g, '').trim();
+    const updatedBakiNote = isFull 
+      ? `${baseNote} [পরিশোধিত]`
+      : `${baseNote} [আংশিক পরিশোধ: €${payAmount}, বাকি: €${bakiTx.amount - newPaidAmount}]`;
+
     // 1. Create payment transaction
     const paymentTempId = `local-${Date.now()}`;
     const paymentDate = new Date().toISOString();
-    const cleanNote = payNote?.trim() || `${bakiTx.note || bakiTx.type} পরিশোধ`;
+    const cleanPaymentNote = payNote?.trim() || `${baseNote} পরিশোধ`;
     const paymentTransaction: Transaction = {
       id: paymentTempId,
       name: bakiTx.name,
       amount: payAmount,
       type: payType,
       date: paymentDate,
-      note: cleanNote
+      note: cleanPaymentNote,
+      status: 'paid'
     };
 
-    // 2. Update baki transaction status and paid amount
+    // 2. Update baki transaction status, paid amount and note
     const updatedTransactions = transactions.map(t => {
       if (t.id === bakiTx.id) {
         return {
           ...t,
+          note: updatedBakiNote,
           status: newStatus,
           paidAmount: newPaidAmount
         };
@@ -363,7 +371,7 @@ const App: React.FC = () => {
         amount: payAmount,
         type: payType,
         date: paymentDate,
-        note: cleanNote,
+        note: cleanPaymentNote,
         user_id: userId
       }]);
 
@@ -371,13 +379,13 @@ const App: React.FC = () => {
         await supabase
           .from('transactions')
           .update({
-            status: newStatus,
-            paidAmount: newPaidAmount
+            note: updatedBakiNote
           })
           .eq('id', bakiTx.id);
       }
       setSyncMessage("হিসাব পরিশোধ সফল হয়েছে ✅");
     } catch (e) {
+      console.error("Supabase sync error:", e);
       setSyncMessage("অফলাইনে পরিশোধ সেভ হলো ⚠️");
     }
     setTimeout(() => setSyncMessage(null), 3000);
