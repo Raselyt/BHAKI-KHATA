@@ -319,6 +319,70 @@ const App: React.FC = () => {
     setTimeout(() => setSyncMessage(null), 3000);
   };
 
+  const handleSettleBakiItem = async (bakiTx: Transaction, payAmount: number, payType: TransactionType, payNote?: string) => {
+    if (!userId) return;
+
+    const currentPaid = bakiTx.paidAmount || 0;
+    const newPaidAmount = currentPaid + payAmount;
+    const isFull = newPaidAmount >= bakiTx.amount;
+    const newStatus: 'paid' | 'partial' = isFull ? 'paid' : 'partial';
+
+    // 1. Create payment transaction
+    const paymentTempId = `local-${Date.now()}`;
+    const paymentDate = new Date().toISOString();
+    const cleanNote = payNote?.trim() || `${bakiTx.note || bakiTx.type} পরিশোধ`;
+    const paymentTransaction: Transaction = {
+      id: paymentTempId,
+      name: bakiTx.name,
+      amount: payAmount,
+      type: payType,
+      date: paymentDate,
+      note: cleanNote
+    };
+
+    // 2. Update baki transaction status and paid amount
+    const updatedTransactions = transactions.map(t => {
+      if (t.id === bakiTx.id) {
+        return {
+          ...t,
+          status: newStatus,
+          paidAmount: newPaidAmount
+        };
+      }
+      return t;
+    });
+
+    const finalList = [paymentTransaction, ...updatedTransactions];
+    setTransactions(finalList);
+    localStorage.setItem('transactions', JSON.stringify(finalList));
+
+    // 3. Sync to Supabase
+    try {
+      await supabase.from('transactions').insert([{
+        name: bakiTx.name,
+        amount: payAmount,
+        type: payType,
+        date: paymentDate,
+        note: cleanNote,
+        user_id: userId
+      }]);
+
+      if (!bakiTx.id.startsWith('local-')) {
+        await supabase
+          .from('transactions')
+          .update({
+            status: newStatus,
+            paidAmount: newPaidAmount
+          })
+          .eq('id', bakiTx.id);
+      }
+      setSyncMessage("হিসাব পরিশোধ সফল হয়েছে ✅");
+    } catch (e) {
+      setSyncMessage("অফলাইনে পরিশোধ সেভ হলো ⚠️");
+    }
+    setTimeout(() => setSyncMessage(null), 3000);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
@@ -349,6 +413,7 @@ const App: React.FC = () => {
           onDelete={handleDeleteTransaction}
           onRenameCustomer={handleRenameCustomer}
           onEditTransaction={handleEditTransaction}
+          onSettleBakiItem={handleSettleBakiItem}
         />
       </Layout>
     );

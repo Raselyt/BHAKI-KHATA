@@ -19,6 +19,9 @@ export interface Transaction {
   type: TransactionType;
   date: string;
   note?: string;
+  status?: 'unpaid' | 'paid' | 'partial';
+  paidAmount?: number;
+  category?: string;
 }
 
 export interface HoldingTransaction {

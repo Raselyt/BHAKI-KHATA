@@ -10,10 +10,11 @@ interface CustomerFolderProps {
   shopName: string;
   transactions: Transaction[];
   onBack: () => void;
-  onAdd: (data: { name: string; amount: number; type: TransactionType; note?: string }) => void;
+  onAdd: (data: { name: string; amount: number; type: TransactionType; note?: string; status?: 'unpaid' | 'paid' | 'partial'; paidAmount?: number }) => void;
   onDelete: (id: string) => void;
   onRenameCustomer?: (oldName: string, newName: string, phone?: string) => void;
-  onEditTransaction?: (id: string, updatedData: { name: string; amount: number; note?: string; type?: TransactionType }) => void;
+  onEditTransaction?: (id: string, updatedData: { name: string; amount: number; note?: string; type?: TransactionType; status?: 'unpaid' | 'paid' | 'partial'; paidAmount?: number }) => void;
+  onSettleBakiItem?: (bakiTx: Transaction, payAmount: number, payType: TransactionType, payNote?: string) => void;
 }
 
 export const CustomerFolder: React.FC<CustomerFolderProps> = ({ 
@@ -26,7 +27,8 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   onAdd, 
   onDelete,
   onRenameCustomer,
-  onEditTransaction
+  onEditTransaction,
+  onSettleBakiItem
 }) => {
   const [showAddModal, setShowAddModal] = useState<{ type: TransactionType } | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -37,6 +39,15 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [txEditAmount, setTxEditAmount] = useState('');
   const [txEditNote, setTxEditNote] = useState('');
+
+  // Settle Item State
+  const [settleModalItem, setSettleModalItem] = useState<Transaction | null>(null);
+  const [settlePayAmount, setSettlePayAmount] = useState('');
+  const [settlePayType, setSettlePayType] = useState<TransactionType>(TransactionType.CASH_PAYMENT);
+  const [settlePayNote, setSettlePayNote] = useState('');
+
+  // History tab filter: 'all' | 'due' | 'paid'
+  const [historyTab, setHistoryTab] = useState<'all' | 'due' | 'paid'>('all');
 
   const [msgType, setMsgType] = useState<'reminder' | 'thankyou' | 'statement'>('reminder');
   const [customMessage, setCustomMessage] = useState('');
@@ -57,6 +68,18 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   const lastPayment = transactions
     .find(t => t.type === TransactionType.BKASH_JOMA || t.type === TransactionType.CASH_PAYMENT);
 
+  // Active Unpaid / Partial Baki items (strictly excluding paid items)
+  const unpaidBakiItems = transactions.filter(t => 
+    (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) &&
+    t.status !== 'paid'
+  );
+
+  // Paid items count
+  const paidItems = transactions.filter(t => 
+    (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) &&
+    t.status === 'paid'
+  );
+
   // Generate Message Text based on type
   const generateMessageText = (type: 'reminder' | 'thankyou' | 'statement', currentBalance = balance) => {
     const shopSignature = shopName ? `\n\n— ${shopName}` : '';
@@ -74,15 +97,27 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
     }
 
     // Default: 'reminder'
-    const bakiNotes = transactions
-      .filter(t => (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) && t.note)
-      .map(t => t.note?.trim())
-      .filter(Boolean);
-    
-    const uniqueNotes = Array.from(new Set(bakiNotes)).slice(0, 5).join(', ');
-    const reasonText = uniqueNotes ? ` (হিসাব: ${uniqueNotes})` : '';
-    
-    return `আসসালামু আলাইকুম ${name},\nআপনার কাছে বর্তমানে € ${currentBalance.toLocaleString('it-IT')}${reasonText} বকেয়া পাওনা আছে। দয়া করে পরিশোধ করার জন্য বিনীত অনুরোধ করা হলো। ধন্যবাদ।${shopSignature}`;
+    // ONLY include ACTIVE / UNPAID baki items!
+    // Paid items are strictly omitted so past settled items NEVER appear in the message!
+    const activeDues = transactions.filter(t => 
+      (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) &&
+      t.status !== 'paid'
+    );
+
+    let reasonSection = '';
+    if (activeDues.length > 0) {
+      const itemsList = activeDues.map(t => {
+        const remaining = Math.max(0, t.amount - (t.paidAmount || 0));
+        const cleanName = t.note?.replace(/\(অবশিষ্ট.*?\)/g, '')
+          .replace(/\[.*?\]/g, '')
+          .trim() || t.type;
+        return `• ${cleanName}: € ${remaining.toLocaleString('it-IT')}`;
+      }).join('\n');
+      
+      reasonSection = `\n\n📌 অপরিশোধিত হিসাব বিবরণ:\n${itemsList}`;
+    }
+
+    return `আসসালামু আলাইকুম ${name},\nআপনার কাছে বর্তমানে মোট € ${currentBalance.toLocaleString('it-IT')} বকেয়া পাওনা আছে।${reasonSection}\n\nদয়া করে পরিশোধ করার জন্য বিনীত অনুরোধ করা হলো। ধন্যবাদ।${shopSignature}`;
   };
 
   const openMessageModal = (type: 'reminder' | 'thankyou' | 'statement' = balance <= 0 ? 'thankyou' : 'reminder') => {
@@ -117,6 +152,62 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   const handleSMS = () => {
     const url = `sms:${phone || ''}?body=${encodeURIComponent(activeMessageText)}`;
     window.open(url, '_blank');
+  };
+
+  const openSettleModal = (item: Transaction) => {
+    const due = Math.max(0, item.amount - (item.paidAmount || 0));
+    setSettleModalItem(item);
+    setSettlePayAmount(due.toString());
+    const isBkash = item.type.includes('বিকাশ') || (item.note && item.note.includes('বিকাশ'));
+    setSettlePayType(isBkash ? TransactionType.BKASH_JOMA : TransactionType.CASH_PAYMENT);
+    setSettlePayNote(`${item.note || item.type} পরিশোধ`);
+  };
+
+  const handleConfirmSettle = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settleModalItem) return;
+    const numAmount = parseFloat(settlePayAmount);
+    const due = Math.max(0, settleModalItem.amount - (settleModalItem.paidAmount || 0));
+    
+    if (isNaN(numAmount) || numAmount <= 0) {
+      alert("সঠিক পরিশোধের টাকার পরিমাণ লিখুন!");
+      return;
+    }
+
+    const payAmount = Math.min(numAmount, due);
+
+    if (onSettleBakiItem) {
+      onSettleBakiItem(settleModalItem, payAmount, settlePayType, settlePayNote.trim());
+    } else {
+      // Fallback
+      const newPaid = (settleModalItem.paidAmount || 0) + payAmount;
+      const isFull = newPaid >= settleModalItem.amount;
+      onAdd({
+        name,
+        amount: payAmount,
+        type: settlePayType,
+        note: settlePayNote.trim() || `${settleModalItem.note || settleModalItem.type} পরিশোধ`
+      });
+      if (onEditTransaction) {
+        onEditTransaction(settleModalItem.id, {
+          name,
+          amount: settleModalItem.amount,
+          note: settleModalItem.note,
+          status: isFull ? 'paid' : 'partial',
+          paidAmount: newPaid
+        });
+      }
+    }
+
+    setSettleModalItem(null);
+    setSettlePayAmount('');
+    setSettlePayNote('');
+
+    // Open thank-you message option
+    const newBal = Math.max(0, balance - payAmount);
+    setMsgType('thankyou');
+    setCustomMessage(generateMessageText('thankyou', newBal));
+    setShowMessageModal(true);
   };
 
   const handleDownloadPDF = async () => {
@@ -326,22 +417,133 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
         </button>
       </div>
 
-      {/* Transaction History */}
-      <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 ml-2">লেনদেন ইতিহাস</h3>
+      {/* Active Unpaid Dues Section */}
+      {unpaidBakiItems.length > 0 && (
+        <div className="mb-8 bg-gradient-to-br from-rose-50/60 to-orange-50/40 p-5 sm:p-6 rounded-[2.5rem] border-2 border-rose-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4 px-1">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></span>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                বর্তমান অপরিশোধিত খাতসমূহ ({unpaidBakiItems.length} টি)
+              </h3>
+            </div>
+            <span className="text-[11px] font-extrabold text-rose-600 bg-rose-100/70 px-2.5 py-1 rounded-xl">
+              খাত অনুযায়ী ১-ক্লিক পরিশোধ
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {unpaidBakiItems.map(item => {
+              const remainingDue = Math.max(0, item.amount - (item.paidAmount || 0));
+              const isBkash = item.type.includes('বিকাশ') || (item.note && item.note.includes('বিকাশ'));
+              const isMobile = item.note && item.note.includes('মোবাইল');
+              const isPartial = item.status === 'partial';
+
+              return (
+                <div 
+                  key={item.id} 
+                  className="bg-white p-4 rounded-2xl border-2 border-rose-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 shadow-xs ${
+                        isBkash ? 'bg-pink-100 text-pink-600' : isMobile ? 'bg-indigo-100 text-indigo-600' : 'bg-orange-100 text-orange-600'
+                      }`}>
+                        {isBkash ? '⚡' : isMobile ? '📱' : '🛒'}
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-800 text-sm">{item.note || item.type}</h4>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          {new Date(item.date).toLocaleDateString('it-IT')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-black text-rose-600 text-lg">€ {remainingDue.toLocaleString('it-IT')}</span>
+                      {isPartial && (
+                        <p className="text-[9px] font-bold text-amber-600">
+                          মূল: €{item.amount}, জমা: €{item.paidAmount}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-slate-400">
+                      {isPartial ? '⚡ আংশিক বাকি' : '⏳ বকেয়া'}
+                    </span>
+                    <button
+                      onClick={() => openSettleModal(item)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span>পরিশোধ করুন 🟢</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Transaction History Section Header & Filter Tabs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 ml-1">
+        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">লেনদেন ইতিহাস</h3>
+        
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl text-[11px] font-black self-start sm:self-auto">
+          <button
+            onClick={() => setHistoryTab('all')}
+            className={`px-3 py-1.5 rounded-xl transition-all ${
+              historyTab === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            সব ({transactions.length})
+          </button>
+          <button
+            onClick={() => setHistoryTab('due')}
+            className={`px-3 py-1.5 rounded-xl transition-all ${
+              historyTab === 'due' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            বকেয়া ({unpaidBakiItems.length})
+          </button>
+          <button
+            onClick={() => setHistoryTab('paid')}
+            className={`px-3 py-1.5 rounded-xl transition-all ${
+              historyTab === 'paid' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            পরিশোধিত ({paidItems.length})
+          </button>
+        </div>
+      </div>
+
       <div className="space-y-3 pb-10">
-        {transactions.map(t => (
-          <TransactionCard 
-            key={t.id} 
-            transaction={t} 
-            onDelete={onDelete} 
-            onEdit={(tx) => {
-              setEditingTx(tx);
-              setTxEditAmount(tx.amount.toString());
-              setTxEditNote(tx.note || '');
-            }}
-            onClick={() => {}} 
-          />
-        ))}
+        {transactions
+          .filter(t => {
+            if (historyTab === 'due') {
+              return (t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI) && t.status !== 'paid';
+            }
+            if (historyTab === 'paid') {
+              return t.status === 'paid' || t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
+            }
+            return true;
+          })
+          .map(t => (
+            <TransactionCard 
+              key={t.id} 
+              transaction={t} 
+              onDelete={onDelete} 
+              onEdit={(tx) => {
+                setEditingTx(tx);
+                setTxEditAmount(tx.amount.toString());
+                setTxEditNote(tx.note || '');
+              }}
+              onSettle={openSettleModal}
+              onClick={() => {}} 
+            />
+          ))}
       </div>
 
       {/* Edit Customer Modal */}
@@ -463,37 +665,291 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
         </div>
       )}
 
-      {/* Quick Add Modal */}
+      {/* Settle Baki Item Modal (১-ক্লিক সম্পূর্ণ বা আংশিক পরিশোধ) */}
+      {settleModalItem && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSettleModalItem(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 z-10">
+            <div className="flex justify-between items-center mb-5">
+              <div>
+                <h3 className="text-xl font-black text-slate-800">হিসাব পরিশোধ করুন ✅</h3>
+                <p className="text-xs font-bold text-slate-400">
+                  {settleModalItem.note || settleModalItem.type}
+                </p>
+              </div>
+              <button 
+                onClick={() => setSettleModalItem(null)} 
+                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
+            {/* Item Due Status Banner */}
+            <div className="bg-rose-50 border-2 border-rose-100 p-4 rounded-2xl mb-5 flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-black uppercase text-rose-500 block tracking-wider">এই খাতের মোট বাকি</span>
+                <span className="text-2xl font-black text-rose-600">
+                  € {Math.max(0, settleModalItem.amount - (settleModalItem.paidAmount || 0)).toLocaleString('it-IT')}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const fullDue = Math.max(0, settleModalItem.amount - (settleModalItem.paidAmount || 0));
+                  setSettlePayAmount(fullDue.toString());
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-md shadow-emerald-100 active:scale-95 transition-all"
+              >
+                পুরো € {Math.max(0, settleModalItem.amount - (settleModalItem.paidAmount || 0))} পরিশোধ
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmSettle} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  পরিশোধের পরিমাণ (€) * (আংশিক বা সম্পূর্ণ)
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-400">€</div>
+                  <input 
+                    type="number" 
+                    step="any"
+                    required
+                    value={settlePayAmount}
+                    onChange={(e) => setSettlePayAmount(e.target.value)}
+                    placeholder="পরিমাণ লিখুন..."
+                    className="w-full p-4 pl-10 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-2xl outline-none focus:border-emerald-600 transition-all text-slate-800"
+                  />
+                </div>
+              </div>
+
+              {/* Payment Type Selection */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  কীভাবে টাকা জমা নিলেন?
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSettlePayType(TransactionType.CASH_PAYMENT)}
+                    className={`py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                      settlePayType === TransactionType.CASH_PAYMENT
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                        : 'bg-white text-slate-600 border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <span>💵 নগদ পরিশোধ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettlePayType(TransactionType.BKASH_JOMA)}
+                    className={`py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                      settlePayType === TransactionType.BKASH_JOMA
+                        ? 'bg-pink-600 text-white border-pink-600 shadow-md'
+                        : 'bg-white text-slate-600 border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <span>📱 বিকাশ জমা</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  পরিশোধের বিবরণ / নোট (ঐচ্ছিক)
+                </label>
+                <input 
+                  type="text" 
+                  value={settlePayNote}
+                  onChange={(e) => setSettlePayNote(e.target.value)}
+                  placeholder="যেমন: বিকাশ বাকি পরিশোধ..."
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-emerald-600 transition-all"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setSettleModalItem(null)}
+                  className="flex-1 bg-slate-100 text-slate-600 p-4 rounded-2xl font-black text-sm"
+                >
+                  বাতিল
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-2xl font-black text-sm shadow-xl shadow-emerald-100 active:scale-95 transition-all"
+                >
+                  পরিশোধ সম্পন্ন করুন ✅
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Quick Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowAddModal(null)} />
-          <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-black mb-6 text-slate-800">
-              {showAddModal.type === TransactionType.BAKI ? 'নতুন বাকি লিখুন' : 'টাকা জমা নিন'}
-            </h3>
+          <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-xl font-black text-slate-800">
+                {showAddModal.type === TransactionType.BAKI || showAddModal.type === TransactionType.BKASH_BAKI 
+                  ? 'নতুন বাকি হিসাব 🔴' 
+                  : 'টাকা জমা নিন 🟢'}
+              </h3>
+              <button 
+                onClick={() => setShowAddModal(null)} 
+                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
             <div className="space-y-4">
-              <input 
-                autoFocus
-                type="number" 
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="টাকার পরিমাণ..."
-                className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-2xl outline-none focus:border-indigo-500 transition-all"
-              />
-              <input 
-                type="text" 
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="বিবরণ (ঐচ্ছিক)..."
-                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-indigo-500 transition-all"
-              />
+              {/* Category Quick Chips */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  খাত / ক্যাটাগরি বাছাই করুন
+                </label>
+                {(showAddModal.type === TransactionType.BAKI || showAddModal.type === TransactionType.BKASH_BAKI) ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddModal({ type: TransactionType.BKASH_BAKI });
+                        setNote('বিকাশ বাকি');
+                      }}
+                      className={`p-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                        showAddModal.type === TransactionType.BKASH_BAKI || note.includes('বিকাশ')
+                          ? 'bg-pink-50 border-pink-500 text-pink-700 shadow-sm'
+                          : 'bg-slate-50 border-slate-100 text-slate-600'
+                      }`}
+                    >
+                      <span>⚡ বিকাশ বাকি</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddModal({ type: TransactionType.BAKI });
+                        setNote('দোকানের বাকি');
+                      }}
+                      className={`p-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                        note === 'দোকানের বাকি'
+                          ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm'
+                          : 'bg-slate-50 border-slate-100 text-slate-600'
+                      }`}
+                    >
+                      <span>🛒 দোকানের বাকি</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddModal({ type: TransactionType.BAKI });
+                        setNote('মোবাইল বাকি');
+                      }}
+                      className={`p-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                        note === 'মোবাইল বাকি'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm'
+                          : 'bg-slate-50 border-slate-100 text-slate-600'
+                      }`}
+                    >
+                      <span>📱 মোবাইল বাকি</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddModal({ type: TransactionType.BAKI });
+                        if (['বিকাশ বাকি', 'দোকানের বাকি', 'মোবাইল বাকি'].includes(note)) setNote('');
+                      }}
+                      className={`p-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                        showAddModal.type === TransactionType.BAKI && !['দোকানের বাকি', 'মোবাইল বাকি'].includes(note) && !note.includes('বিকাশ')
+                          ? 'bg-slate-800 border-slate-800 text-white shadow-sm'
+                          : 'bg-slate-50 border-slate-100 text-slate-600'
+                      }`}
+                    >
+                      <span>📝 সাধারণ বাকি</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddModal({ type: TransactionType.CASH_PAYMENT });
+                        setNote('নগদ পরিশোধ');
+                      }}
+                      className={`p-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                        showAddModal.type === TransactionType.CASH_PAYMENT
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                      }`}
+                    >
+                      <span>💵 নগদ পরিশোধ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddModal({ type: TransactionType.BKASH_JOMA });
+                        setNote('বিকাশ জমা');
+                      }}
+                      className={`p-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 border-2 transition-all ${
+                        showAddModal.type === TransactionType.BKASH_JOMA
+                          ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
+                          : 'bg-pink-50 border-pink-100 text-pink-700'
+                      }`}
+                    >
+                      <span>📱 বিকাশ জমা</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  টাকার পরিমাণ (€) *
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-400">€</div>
+                  <input 
+                    autoFocus
+                    type="number" 
+                    step="any"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full p-4 pl-10 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-2xl outline-none focus:border-slate-800 transition-all text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  বিবরণ (ঐচ্ছিক)
+                </label>
+                <input 
+                  type="text" 
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="যেমন: বিকাশ বাকি, দোকানের বাকি ইত্যাদি..."
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-slate-800 transition-all"
+                />
+              </div>
+
               <button 
                 onClick={handleQuickAdd}
-                className={`w-full py-5 rounded-2xl font-black text-white shadow-xl transition-all active:scale-95 ${
-                  showAddModal.type === TransactionType.BAKI ? 'bg-rose-500 shadow-rose-100' : 'bg-emerald-500 shadow-emerald-100'
+                className={`w-full py-4 rounded-2xl font-black text-white shadow-xl transition-all active:scale-95 text-base ${
+                  showAddModal.type === TransactionType.BAKI || showAddModal.type === TransactionType.BKASH_BAKI 
+                    ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-100' 
+                    : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-100'
                 }`}
               >
-                সেভ করুন
+                সেভ করুন ✅
               </button>
             </div>
           </div>

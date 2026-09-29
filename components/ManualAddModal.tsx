@@ -79,48 +79,139 @@ export const ManualAddModal: React.FC<ManualAddModalProps> = ({ isOpen, onClose,
               />
             </div>
 
+            {/* Category / Type Toggles */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4">
+                খাত / ক্যাটাগরি বাছাই করুন
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setType(TransactionType.BKASH_BAKI);
+                    if (!note || ['বাকি', 'দোকানের বাকি', 'মোবাইল বাকি', 'নগদ পরিশোধ', 'বিকাশ জমা'].includes(note)) {
+                      setNote('বিকাশ বাকি');
+                    }
+                  }}
+                  className={`p-3 rounded-2xl font-black text-xs sm:text-sm flex flex-col items-center gap-1 transition-all border-2 ${
+                    type === TransactionType.BKASH_BAKI 
+                    ? 'bg-pink-50 border-pink-500 text-pink-700 shadow-md scale-102' 
+                    : 'bg-white border-slate-100 text-slate-600 hover:border-slate-200'
+                  }`}
+                >
+                  <span className="text-base">⚡</span>
+                  <span>বিকাশ বাকি</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setType(TransactionType.BAKI);
+                    if (!note || ['বাকি', 'বিকাশ বাকি', 'মোবাইল বাকি', 'নগদ পরিশোধ', 'বিকাশ জমা'].includes(note)) {
+                      setNote('দোকানের বাকি');
+                    }
+                  }}
+                  className={`p-3 rounded-2xl font-black text-xs sm:text-sm flex flex-col items-center gap-1 transition-all border-2 ${
+                    type === TransactionType.BAKI && note === 'দোকানের বাকি'
+                    ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-md scale-102' 
+                    : 'bg-white border-slate-100 text-slate-600 hover:border-slate-200'
+                  }`}
+                >
+                  <span className="text-base">🛒</span>
+                  <span>দোকানের বাকি</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setType(TransactionType.BAKI);
+                    if (!note || ['বাকি', 'বিকাশ বাকি', 'দোকানের বাকি', 'নগদ পরিশোধ', 'বিকাশ জমা'].includes(note)) {
+                      setNote('মোবাইল বাকি');
+                    }
+                  }}
+                  className={`p-3 rounded-2xl font-black text-xs sm:text-sm flex flex-col items-center gap-1 transition-all border-2 ${
+                    type === TransactionType.BAKI && note === 'মোবাইল বাকি'
+                    ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-md scale-102' 
+                    : 'bg-white border-slate-100 text-slate-600 hover:border-slate-200'
+                  }`}
+                >
+                  <span className="text-base">📱</span>
+                  <span>মোবাইল বাকি</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setType(TransactionType.BAKI);
+                    if (['দোকানের বাকি', 'বিকাশ বাকি', 'মোবাইল বাকি', 'নগদ পরিশোধ', 'বিকাশ জমা'].includes(note)) {
+                      setNote('');
+                    }
+                  }}
+                  className={`p-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-1 transition-all border-2 ${
+                    type === TransactionType.BAKI && !['দোকানের বাকি', 'মোবাইল বাকি'].includes(note)
+                    ? 'bg-slate-800 border-slate-800 text-white shadow-sm' 
+                    : 'bg-slate-50 border-slate-100 text-slate-500'
+                  }`}
+                >
+                  <span>📝 সাধারণ বাকি</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setType(TransactionType.CASH_PAYMENT);
+                    if (!note || ['বাকি', 'বিকাশ বাকি', 'দোকানের বাকি', 'মোবাইল বাকি', 'বিকাশ জমা'].includes(note)) {
+                      setNote('নগদ পরিশোধ');
+                    }
+                  }}
+                  className={`p-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-1 transition-all border-2 ${
+                    type === TransactionType.CASH_PAYMENT
+                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' 
+                    : 'bg-emerald-50/50 border-emerald-100 text-emerald-700'
+                  }`}
+                >
+                  <span>💵 নগদ জমা</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setType(TransactionType.BKASH_JOMA);
+                    if (!note || ['বাকি', 'বিকাশ বাকি', 'দোকানের বাকি', 'মোবাইল বাকি', 'নগদ পরিশোধ'].includes(note)) {
+                      setNote('বিকাশ জমা');
+                    }
+                  }}
+                  className={`p-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-1 transition-all border-2 ${
+                    type === TransactionType.BKASH_JOMA
+                    ? 'bg-pink-600 border-pink-600 text-white shadow-sm' 
+                    : 'bg-pink-50/50 border-pink-100 text-pink-700'
+                  }`}
+                >
+                  <span>💳 বিকাশ জমা</span>
+                </button>
+              </div>
+            </div>
+
             {/* Note Input */}
             <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4">বিবরণ / কারণ (যেমন: ফটোকপি, রিচার্জ)</label>
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4">
+                বিবরণ / বিস্তারিত নোট (ঐচ্ছিক)
+              </label>
               <input 
                 type="text"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="কি কারণে বাকি? (ঐচ্ছিক)"
-                className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2rem] font-bold text-slate-700 placeholder:text-slate-300 shadow-sm focus:border-emerald-500 transition-all outline-none"
+                placeholder="যেমন: বিকাশ বাকি, দোকানের বাকি, চাল-ডাল ইত্যাদি..."
+                className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] font-bold text-slate-700 placeholder:text-slate-300 shadow-sm focus:border-emerald-500 transition-all outline-none"
               />
-            </div>
-
-            {/* Type Toggles */}
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              <button 
-                onClick={() => setType(TransactionType.BAKI)}
-                className={`py-5 rounded-[2rem] font-black text-lg transition-all shadow-md ${
-                  type === TransactionType.BAKI 
-                  ? 'bg-[#f97316] text-white shadow-orange-200 scale-105' 
-                  : 'bg-white text-slate-400 border-2 border-slate-100'
-                }`}
-              >
-                বাকি
-              </button>
-              <button 
-                onClick={() => setType(TransactionType.BKASH_BAKI)}
-                className={`py-5 rounded-[2rem] font-black text-lg transition-all shadow-md ${
-                  type === TransactionType.BKASH_BAKI 
-                  ? 'bg-white text-[#db2777] border-2 border-[#db2777] scale-105' 
-                  : 'bg-white text-slate-400 border-2 border-slate-100'
-                }`}
-              >
-                বিকাশ বাকি
-              </button>
             </div>
 
             {/* Save Button */}
             <button 
               onClick={handleSave}
-              className="w-full bg-[#059669] hover:bg-[#047857] text-white py-6 rounded-[2.5rem] font-black text-xl shadow-xl shadow-emerald-100 active:scale-95 transition-all mt-6"
+              className="w-full bg-[#059669] hover:bg-[#047857] text-white py-6 rounded-[2.5rem] font-black text-xl shadow-xl shadow-emerald-100 active:scale-95 transition-all mt-4"
             >
-              হিসাব সেভ করুন
+              হিসাব সেভ করুন ✅
             </button>
           </div>
         </div>
