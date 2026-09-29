@@ -202,12 +202,6 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
     setSettleModalItem(null);
     setSettlePayAmount('');
     setSettlePayNote('');
-
-    // Open thank-you message option
-    const newBal = Math.max(0, balance - payAmount);
-    setMsgType('thankyou');
-    setCustomMessage(generateMessageText('thankyou', newBal));
-    setShowMessageModal(true);
   };
 
   const handleDownloadPDF = async () => {
@@ -416,76 +410,6 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
           <p className="font-black text-emerald-600">টাকা জমা নিন</p>
         </button>
       </div>
-
-      {/* Active Unpaid Dues Section */}
-      {unpaidBakiItems.length > 0 && (
-        <div className="mb-8 bg-gradient-to-br from-rose-50/60 to-orange-50/40 p-5 sm:p-6 rounded-[2.5rem] border-2 border-rose-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></span>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                বর্তমান অপরিশোধিত খাতসমূহ ({unpaidBakiItems.length} টি)
-              </h3>
-            </div>
-            <span className="text-[11px] font-extrabold text-rose-600 bg-rose-100/70 px-2.5 py-1 rounded-xl">
-              খাত অনুযায়ী ১-ক্লিক পরিশোধ
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {unpaidBakiItems.map(item => {
-              const remainingDue = Math.max(0, item.amount - (item.paidAmount || 0));
-              const isBkash = item.type.includes('বিকাশ') || (item.note && item.note.includes('বিকাশ'));
-              const isMobile = item.note && item.note.includes('মোবাইল');
-              const isPartial = item.status === 'partial';
-
-              return (
-                <div 
-                  key={item.id} 
-                  className="bg-white p-4 rounded-2xl border-2 border-rose-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 shadow-xs ${
-                        isBkash ? 'bg-pink-100 text-pink-600' : isMobile ? 'bg-indigo-100 text-indigo-600' : 'bg-orange-100 text-orange-600'
-                      }`}>
-                        {isBkash ? '⚡' : isMobile ? '📱' : '🛒'}
-                      </div>
-                      <div>
-                        <h4 className="font-black text-slate-800 text-sm">{item.note || item.type}</h4>
-                        <p className="text-[10px] text-slate-400 font-bold">
-                          {new Date(item.date).toLocaleDateString('it-IT')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-black text-rose-600 text-lg">€ {remainingDue.toLocaleString('it-IT')}</span>
-                      {isPartial && (
-                        <p className="text-[9px] font-bold text-amber-600">
-                          মূল: €{item.amount}, জমা: €{item.paidAmount}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold text-slate-400">
-                      {isPartial ? '⚡ আংশিক বাকি' : '⏳ বকেয়া'}
-                    </span>
-                    <button
-                      onClick={() => openSettleModal(item)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                      <span>পরিশোধ করুন 🟢</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Transaction History Section Header & Filter Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 ml-1">
