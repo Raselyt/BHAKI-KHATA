@@ -12,6 +12,7 @@ import { CustomerFolder } from './components/CustomerFolder.tsx';
 import { ManualAddModal } from './components/ManualAddModal.tsx';
 import { Login } from './components/Login.tsx';
 import { HoldingLedger } from './components/HoldingLedger.tsx';
+import { BulkWAMessengerModal } from './components/BulkWAMessengerModal.tsx';
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -24,6 +25,7 @@ const App: React.FC = () => {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
+  const [isBulkWAModalOpen, setIsBulkWAModalOpen] = useState(false);
   const [currentMode, setCurrentMode] = useState<'baki' | 'holding'>('baki');
   
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
@@ -32,6 +34,25 @@ const App: React.FC = () => {
   const [editingCustomerFromList, setEditingCustomerFromList] = useState<{ oldName: string; phone?: string } | null>(null);
   const [listEditName, setListEditName] = useState('');
   const [listEditPhone, setListEditPhone] = useState('');
+
+  const handleSaveCustomerPhone = (name: string, phone: string) => {
+    const trimmed = phone.trim();
+    const updated = { ...customerPhones, [name]: trimmed };
+    setCustomerPhones(updated);
+    localStorage.setItem('customerPhones', JSON.stringify(updated));
+    setSyncMessage(`মোবাইল নম্বর সেভ করা হয়েছে ✅`);
+    setTimeout(() => setSyncMessage(null), 2500);
+  };
+
+  const handleDirectWhatsAppFromCard = (cust: { name: string; balance: number; phone?: string }) => {
+    if (!cust.phone) return;
+    let cleaned = cust.phone.replace(/[^0-9+]/g, '');
+    if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
+    if (cleaned.startsWith('01') && cleaned.length === 11) cleaned = '88' + cleaned;
+    const formattedBalance = Math.abs(cust.balance).toLocaleString('it-IT');
+    const text = `আসসালামু আলাইকুম ${cust.name},\nআপনার কাছে ${shopName || 'দোকানের খাতা'}-এ বর্তমানে € ${formattedBalance} বকেয়া পাওনা আছে। দয়া করে পরিশোধ করার জন্য বিনীত অনুরোধ করা হলো। ধন্যবাদ।\n— ${shopName || 'দোকানের খাতা'}`;
+    window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`, '_blank');
+  };
 
   useEffect(() => {
     const savedPhones = localStorage.getItem('customerPhones');
@@ -353,6 +374,14 @@ const App: React.FC = () => {
         onAdd={handleAddTransaction}
       />
 
+      <BulkWAMessengerModal
+        isOpen={isBulkWAModalOpen}
+        onClose={() => setIsBulkWAModalOpen(false)}
+        customers={customers}
+        shopName={shopName}
+        onSavePhone={handleSaveCustomerPhone}
+      />
+
       {/* Edit Customer Modal From Main List */}
       {editingCustomerFromList && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
@@ -465,6 +494,38 @@ const App: React.FC = () => {
           <DashboardStats stats={stats} />
           <SmartAddInput onParsed={handleAddTransaction} />
 
+          {/* Bulk WhatsApp Reminder Banner */}
+          {customers.some(c => c.balance > 0) && (
+            <div className="bg-gradient-to-r from-emerald-600 via-emerald-700 to-slate-900 rounded-[2rem] p-4 sm:p-5 text-white shadow-xl shadow-emerald-900/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-emerald-500/20 my-2">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 bg-white/15 backdrop-blur-md rounded-2xl flex items-center justify-center text-2xl shadow-inner border border-white/20 shrink-0">
+                  💬
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-black text-base sm:text-lg tracking-tight">
+                      ১-ক্লিকে সবাইকে WhatsApp তাগাদা
+                    </h4>
+                    <span className="bg-emerald-400/30 text-emerald-100 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-400/20">
+                      বাকি খাতা
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-100/90 font-bold mt-0.5">
+                    মোট বাকি: {customers.filter(c => c.balance > 0).length} জন • নম্বর রেডি: {customers.filter(c => c.balance > 0 && c.phone && c.phone.trim().length >= 8).length} জন
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsBulkWAModalOpen(true)}
+                className="px-5 py-3 bg-white text-emerald-900 hover:bg-emerald-50 active:scale-95 rounded-2xl font-black text-xs sm:text-sm shadow-lg transition-all flex items-center justify-center gap-2 shrink-0"
+              >
+                <span>তাগাদা পাঠান</span>
+                <span className="text-sm">🚀</span>
+              </button>
+            </div>
+          )}
+
           <div className="py-2 border-b border-slate-50">
              <div className="relative">
                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -500,6 +561,7 @@ const App: React.FC = () => {
                     setListEditName(name);
                     setListEditPhone(phone || '');
                   }}
+                  onDirectWhatsApp={handleDirectWhatsAppFromCard}
                 />
               ))
             )}
