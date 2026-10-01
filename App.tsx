@@ -13,6 +13,10 @@ import { ManualAddModal } from './components/ManualAddModal.tsx';
 import { Login } from './components/Login.tsx';
 import { HoldingLedger } from './components/HoldingLedger.tsx';
 import { BulkWAMessengerModal } from './components/BulkWAMessengerModal.tsx';
+import { 
+  reconcileAllTransactions, 
+  syncReconciledNotesToSupabase 
+} from './services/reconciliationService.ts';
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -78,13 +82,14 @@ const App: React.FC = () => {
     setCustomerPhones(updatedPhones);
     localStorage.setItem('customerPhones', JSON.stringify(updatedPhones));
 
-    // 2. Update transactions array where t.name === oldName
-    const updatedTransactions = transactions.map(t => {
+    // 2. Update transactions array where t.name === oldName & reconcile
+    const mapped = transactions.map(t => {
       if (t.name === oldName) {
         return { ...t, name: trimmedNew };
       }
       return t;
     });
+    const updatedTransactions = reconcileAllTransactions(mapped);
 
     setTransactions(updatedTransactions);
     localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
@@ -111,7 +116,7 @@ const App: React.FC = () => {
   };
 
   const handleEditTransaction = async (id: string, updatedData: { name: string; amount: number; note?: string; type?: TransactionType }) => {
-    const updatedTransactions = transactions.map(t => {
+    const mapped = transactions.map(t => {
       if (t.id === id) {
         return {
           ...t,
@@ -120,6 +125,7 @@ const App: React.FC = () => {
       }
       return t;
     });
+    const updatedTransactions = reconcileAllTransactions(mapped);
 
     setTransactions(updatedTransactions);
     localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
@@ -173,7 +179,7 @@ const App: React.FC = () => {
   const fetchTransactions = async (uid: string) => {
     if (!uid) return;
     setSyncing(true);
-    setSyncMessage("ডাটা লোড হচ্ছে...");
+    setSyncMessage("ডাটা লোড ও হিসাব বিশ্লেষণ হচ্ছে...");
     try {
       const { data, error } = await supabase
         .from('transactions')
@@ -184,13 +190,19 @@ const App: React.FC = () => {
       if (error) throw error;
       
       if (data) {
-        setTransactions(data);
-        localStorage.setItem('transactions', JSON.stringify(data));
-        setSyncMessage("ডাটা সিঙ্ক হয়েছে ✅");
+        // Automatically reconcile all customer debts and payments
+        const reconciled = reconcileAllTransactions(data);
+        setTransactions(reconciled);
+        localStorage.setItem('transactions', JSON.stringify(reconciled));
+        setSyncMessage("ডাটা লোড ও হিসাব সমন্বয় সম্পন্ন ✅");
       }
     } catch (error) {
       const local = localStorage.getItem('transactions');
-      if (local) setTransactions(JSON.parse(local));
+      if (local) {
+        const parsed = JSON.parse(local);
+        const reconciled = reconcileAllTransactions(parsed);
+        setTransactions(reconciled);
+      }
       setSyncMessage("অফলাইন মোড 📁");
     } finally {
       setSyncing(false);
@@ -223,16 +235,17 @@ const App: React.FC = () => {
 
       // Add user_id to imported transactions if missing
       const sanitized = finalTransactions.map(t => ({...t, user_id: userId}));
+      const reconciled = reconcileAllTransactions(sanitized);
       
-      setTransactions(sanitized);
-      localStorage.setItem('transactions', JSON.stringify(sanitized));
+      setTransactions(reconciled);
+      localStorage.setItem('transactions', JSON.stringify(reconciled));
       
       // Upload to Supabase
       if (userId) {
         await supabase.from('transactions').insert(sanitized);
       }
       
-      setSyncMessage("ইম্পোর্ট সফল ✅");
+      setSyncMessage("ইম্পোর্ট ও হিসাব সমন্বয় সফল ✅");
       setIsSyncModalOpen(false);
     } catch (error) {
       alert("ইম্পোর্ট করতে সমস্যা হয়েছে।");
@@ -290,7 +303,7 @@ const App: React.FC = () => {
     const date = new Date().toISOString();
     const newTransaction: Transaction = { ...data, id: tempId, date };
     
-    const updatedTransactions = [newTransaction, ...transactions];
+    const updatedTransactions = reconcileAllTransactions([newTransaction, ...transactions]);
     setTransactions(updatedTransactions);
     localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
 
@@ -309,7 +322,7 @@ const App: React.FC = () => {
 
   const handleDeleteTransaction = async (id: string) => {
     if (!confirm("আপনি কি নিশ্চিতভাবে মুছতে চান?")) return;
-    const updated = transactions.filter(t => t.id !== id);
+    const updated = reconcileAllTransactions(transactions.filter(t => t.id !== id));
     setTransactions(updated);
     localStorage.setItem('transactions', JSON.stringify(updated));
     if (!id.startsWith('local-')) {
@@ -322,16 +335,7 @@ const App: React.FC = () => {
   const handleSettleBakiItem = async (bakiTx: Transaction, payAmount: number, payType: TransactionType, payNote?: string) => {
     if (!userId) return;
 
-    const currentPaid = bakiTx.paidAmount || 0;
-    const newPaidAmount = currentPaid + payAmount;
-    const isFull = newPaidAmount >= bakiTx.amount;
-    const newStatus: 'paid' | 'partial' = isFull ? 'paid' : 'partial';
-
-    // Update note with [পরিশোধিত] tag so it persists in Supabase's existing text note column
     const baseNote = (bakiTx.note || bakiTx.type).replace(/\s*\[পরিশোধিত\]/g, '').replace(/\s*\[আংশিক পরিশোধ.*?\]/g, '').trim();
-    const updatedBakiNote = isFull 
-      ? `${baseNote} [পরিশোধিত]`
-      : `${baseNote} [আংশিক পরিশোধ: €${payAmount}, বাকি: €${bakiTx.amount - newPaidAmount}]`;
 
     // 1. Create payment transaction
     const paymentTempId = `local-${Date.now()}`;
@@ -347,20 +351,9 @@ const App: React.FC = () => {
       status: 'paid'
     };
 
-    // 2. Update baki transaction status, paid amount and note
-    const updatedTransactions = transactions.map(t => {
-      if (t.id === bakiTx.id) {
-        return {
-          ...t,
-          note: updatedBakiNote,
-          status: newStatus,
-          paidAmount: newPaidAmount
-        };
-      }
-      return t;
-    });
-
-    const finalList = [paymentTransaction, ...updatedTransactions];
+    // 2. Reconcile customer transactions with new payment
+    const combined = [paymentTransaction, ...transactions];
+    const finalList = reconcileAllTransactions(combined);
     setTransactions(finalList);
     localStorage.setItem('transactions', JSON.stringify(finalList));
 
@@ -375,11 +368,13 @@ const App: React.FC = () => {
         user_id: userId
       }]);
 
-      if (!bakiTx.id.startsWith('local-')) {
+      // Find updated baki transaction note
+      const updatedBaki = finalList.find(t => t.id === bakiTx.id);
+      if (updatedBaki && !bakiTx.id.startsWith('local-')) {
         await supabase
           .from('transactions')
           .update({
-            note: updatedBakiNote
+            note: updatedBaki.note || ''
           })
           .eq('id', bakiTx.id);
       }
@@ -389,6 +384,29 @@ const App: React.FC = () => {
       setSyncMessage("অফলাইনে পরিশোধ সেভ হলো ⚠️");
     }
     setTimeout(() => setSyncMessage(null), 3000);
+  };
+
+  const handleReconcileHistory = async () => {
+    setSyncing(true);
+    setSyncMessage("পুরোনো হিসাবের পুরো হিস্টরি বিশ্লেষণ ও সমন্বয় হচ্ছে... ⏳");
+    try {
+      const reconciled = reconcileAllTransactions(transactions);
+      setTransactions(reconciled);
+      localStorage.setItem('transactions', JSON.stringify(reconciled));
+
+      if (userId) {
+        const res = await syncReconciledNotesToSupabase(reconciled, userId);
+        setSyncMessage(`হিসাবের হিস্টরি সফলভাবে সমন্বয় করা হয়েছে (${res.updatedCount} লেনদেন ডাটাবেজে সিঙ্ক) ✅`);
+      } else {
+        setSyncMessage("হিসাবের হিস্টরি সফলভাবে সমন্বয় করা হয়েছে ✅");
+      }
+    } catch (e) {
+      console.error("Reconciliation error:", e);
+      setSyncMessage("হিসাব সমন্বয় সম্পন্ন হয়েছে ✅");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMessage(null), 3500);
+    }
   };
 
   if (loading) {
@@ -422,6 +440,7 @@ const App: React.FC = () => {
           onRenameCustomer={handleRenameCustomer}
           onEditTransaction={handleEditTransaction}
           onSettleBakiItem={handleSettleBakiItem}
+          onReconcileHistory={handleReconcileHistory}
         />
       </Layout>
     );
@@ -439,6 +458,7 @@ const App: React.FC = () => {
         onClose={() => setIsSyncModalOpen(false)}
         transactions={transactions}
         onImportData={handleImportData} 
+        onReconcileAll={handleReconcileHistory}
       />
 
       <ManualAddModal 
@@ -599,13 +619,29 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {/* Customer List Header & Reconcile Button */}
+          <div className="flex items-center justify-between gap-2 px-1 mb-2 mt-4">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+              গ্রাহকের খাতা তালিকা ({customers.length})
+            </span>
+            <button
+              onClick={handleReconcileHistory}
+              disabled={syncing}
+              className="text-[11px] font-black text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-200/80 transition-all active:scale-95 flex items-center gap-1.5 shrink-0"
+              title="পুরোনো সব লেনদেন বিশ্লেষণ করে বকেয়া ও পরিশোধিত স্ট্যাটাস ঠিক করুন"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              <span>হিস্টরি সমন্বয়</span>
+            </button>
+          </div>
+
           <div className="py-2 border-b border-slate-50">
              <div className="relative">
                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                </div>
                <input 
-                 type="text"
+                 type="text" 
                  placeholder="নাম দিয়ে কাস্টমার খুঁজুন..."
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}

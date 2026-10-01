@@ -1,7 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
 import { TransactionCard } from './TransactionCard.tsx';
+import { 
+  reconcileCustomerTransactions, 
+  isBakiTransaction, 
+  isPaymentTransaction 
+} from '../services/reconciliationService.ts';
 
 interface CustomerFolderProps {
   name: string;
@@ -15,6 +20,7 @@ interface CustomerFolderProps {
   onRenameCustomer?: (oldName: string, newName: string, phone?: string) => void;
   onEditTransaction?: (id: string, updatedData: { name: string; amount: number; note?: string; type?: TransactionType; status?: 'unpaid' | 'paid' | 'partial'; paidAmount?: number }) => void;
   onSettleBakiItem?: (bakiTx: Transaction, payAmount: number, payType: TransactionType, payNote?: string) => void;
+  onReconcileHistory?: () => void;
 }
 
 export const CustomerFolder: React.FC<CustomerFolderProps> = ({ 
@@ -28,7 +34,8 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   onDelete,
   onRenameCustomer,
   onEditTransaction,
-  onSettleBakiItem
+  onSettleBakiItem,
+  onReconcileHistory
 }) => {
   const [showAddModal, setShowAddModal] = useState<{ type: TransactionType } | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -56,70 +63,73 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   const [copyStatus, setCopyStatus] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Guaranteed reconciled transactions for this specific customer
+  const customerTransactions = useMemo(() => {
+    return reconcileCustomerTransactions(transactions);
+  }, [transactions]);
+
+  // Accurate total baki and total joma
+  const totalBaki = useMemo(() => {
+    return customerTransactions
+      .filter(isBakiTransaction)
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  }, [customerTransactions]);
+
+  const totalJoma = useMemo(() => {
+    return customerTransactions
+      .filter(isPaymentTransaction)
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  }, [customerTransactions]);
+
+  const currentBalance = Math.max(0, totalBaki - totalJoma);
+
   // Check if a baki transaction is paid/settled
   const isBakiSettled = (t: Transaction): boolean => {
-    if (t.type !== TransactionType.BAKI && t.type !== TransactionType.BKASH_BAKI) {
-      return false;
-    }
-    if (t.status === 'paid') return true;
-    if (t.note && (t.note.includes('[পরিশোধিত]') || t.note.includes('(পরিশোধিত)'))) return true;
-
-    // Check if there is an explicit payment transaction recorded that settles this baki
-    const rawNote = (t.note || '').trim().toLowerCase();
-    if (!rawNote) return false;
-
-    return transactions.some(p => {
-      const isPayment = p.type === TransactionType.CASH_PAYMENT || p.type === TransactionType.BKASH_JOMA;
-      if (!isPayment) return false;
-      const pNote = (p.note || '').toLowerCase();
-      return pNote.includes(rawNote) && pNote.includes('পরিশোধ') && p.amount === t.amount;
-    });
+    if (!isBakiTransaction(t)) return false;
+    // If customer overall has no due left (balance <= 0), ALL baki are settled!
+    if (currentBalance <= 0) return true;
+    return t.status === 'paid' || Boolean(t.note && (t.note.includes('[পরিশোধিত]') || t.note.includes('(পরিশোধিত)')));
   };
 
-  // Stats calculations for this customer
-  const totalBaki = transactions
-    .filter(t => t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalJoma = transactions
-    .filter(t => t.type === TransactionType.BKASH_JOMA || t.type === TransactionType.CASH_PAYMENT)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const lastPayment = transactions
-    .find(t => t.type === TransactionType.BKASH_JOMA || t.type === TransactionType.CASH_PAYMENT);
+  const lastPayment = useMemo(() => {
+    return customerTransactions.find(isPaymentTransaction);
+  }, [customerTransactions]);
 
   // Active Due items: ONLY baki transactions that are NOT settled
-  const unpaidBakiItems = transactions.filter(t => {
-    const isBaki = t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI;
-    return isBaki && !isBakiSettled(t);
-  });
+  // If balance <= 0, this is guaranteed to be [] (empty array)
+  const unpaidBakiItems = useMemo(() => {
+    if (currentBalance <= 0) return [];
+    return customerTransactions.filter(t => isBakiTransaction(t) && !isBakiSettled(t));
+  }, [customerTransactions, currentBalance]);
 
-  // Paid items:
-  // All payment deposits + settled baki items
-  const paidItems = transactions.filter(t => {
-    const isPayment = t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
-    return isPayment || isBakiSettled(t);
-  });
+  // Paid items: All payment deposits + settled baki items
+  const paidItems = useMemo(() => {
+    return customerTransactions.filter(t => isPaymentTransaction(t) || isBakiSettled(t));
+  }, [customerTransactions, currentBalance]);
 
   // Generate Message Text based on type
-  const generateMessageText = (type: 'reminder' | 'thankyou' | 'statement', currentBalance = balance) => {
+  const generateMessageText = (type: 'reminder' | 'thankyou' | 'statement', targetBalance = currentBalance) => {
     const shopSignature = shopName ? `\n\n— ${shopName}` : '';
     
     if (type === 'thankyou') {
-      if (currentBalance <= 0) {
+      if (targetBalance <= 0) {
         return `আসসালামু আলাইকুম ${name},\nআপনার বাকি টাকা পরিশোধ করার জন্য আপনাকে অসংখ্য ধন্যবাদ! আপনার সাথে সততার সাথে লেনদেন করতে পেরে আমরা অত্যন্ত আনন্দিত। 🤝${shopSignature}`;
       } else {
-        return `আসসালামু আলাইকুম ${name},\nআপনার বকেয়া টাকা জমা দেওয়ার জন্য আপনাকে অসংখ্য ধন্যবাদ! 🤝\nঅবশিষ্ট বকেয়া পরিমাণ: € ${currentBalance.toLocaleString('it-IT')}${shopSignature}`;
+        return `আসসালামু আলাইকুম ${name},\nআপনার বকেয়া টাকা জমা দেওয়ার জন্য আপনাকে অসংখ্য ধন্যবাদ! 🤝\nঅবশিষ্ট বকেয়া পরিমাণ: € ${targetBalance.toLocaleString('it-IT')}${shopSignature}`;
       }
     }
 
     if (type === 'statement') {
-      return `আসসালামু আলাইকুম ${name},\nআপনার হিসাব বিবরণী:\n• মোট বাকি: € ${totalBaki.toLocaleString('it-IT')}\n• মোট জমা: € ${totalJoma.toLocaleString('it-IT')}\n• বর্তমান বাকি: € ${currentBalance.toLocaleString('it-IT')}\n\nধন্যবাদ।${shopSignature}`;
+      return `আসসালামু আলাইকুম ${name},\nআপনার হিসাব বিবরণী:\n• মোট বাকি: € ${totalBaki.toLocaleString('it-IT')}\n• মোট জমা: € ${totalJoma.toLocaleString('it-IT')}\n• বর্তমান বাকি: € ${targetBalance.toLocaleString('it-IT')}\n\nধন্যবাদ।${shopSignature}`;
     }
 
     // Default: 'reminder'
     // ONLY include ACTIVE / UNPAID baki items!
     // Paid items are strictly omitted so past settled items NEVER appear in the message!
+    if (targetBalance <= 0) {
+      return `আসসালামু আলাইকুম ${name},\nআপনার কোনো বকেয়া বাকি নেই। আপনার সব হিসাব পরিশোধিত। ধন্যবাদ।${shopSignature}`;
+    }
+
     let reasonSection = '';
     if (unpaidBakiItems.length > 0) {
       const itemsList = unpaidBakiItems.map(t => {
@@ -134,10 +144,10 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
       reasonSection = `\n\n📌 অপরিশোধিত হিসাব বিবরণ:\n${itemsList}`;
     }
 
-    return `আসসালামু আলাইকুম ${name},\nআপনার কাছে বর্তমানে মোট € ${currentBalance.toLocaleString('it-IT')} বকেয়া পাওনা আছে।${reasonSection}\n\nদয়া করে পরিশোধ করার জন্য বিনীত অনুরোধ করা হলো। ধন্যবাদ।${shopSignature}`;
+    return `আসসালামু আলাইকুম ${name},\nআপনার কাছে বর্তমানে মোট € ${targetBalance.toLocaleString('it-IT')} বকেয়া পাওনা আছে।${reasonSection}\n\nদয়া করে পরিশোধ করার জন্য বিনীত অনুরোধ করা হলো। ধন্যবাদ।${shopSignature}`;
   };
 
-  const openMessageModal = (type: 'reminder' | 'thankyou' | 'statement' = balance <= 0 ? 'thankyou' : 'reminder') => {
+  const openMessageModal = (type: 'reminder' | 'thankyou' | 'statement' = currentBalance <= 0 ? 'thankyou' : 'reminder') => {
     setMsgType(type);
     setCustomMessage(generateMessageText(type));
     setShowMessageModal(true);
@@ -230,7 +240,7 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
       const element = document.getElementById('report-pdf-template');
       if (!element) throw new Error("Template not found");
 
-      const opt = {
+      const opt: any = {
         margin: [10, 10, 10, 10],
         filename: `${name}_report_${new Date().toISOString().split('T')[0]}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
@@ -278,7 +288,7 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
 
     // If money was received/paid, automatically open thank-you message modal with updated projected balance
     if (isPayment) {
-      const newBal = Math.max(0, balance - numAmount);
+      const newBal = Math.max(0, currentBalance - numAmount);
       setMsgType('thankyou');
       setCustomMessage(generateMessageText('thankyou', newBal));
       setShowMessageModal(true);
@@ -316,22 +326,34 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-3 bg-slate-100 rounded-2xl text-slate-600 active:scale-90 transition-all">
+      <div className="flex items-center gap-2 sm:gap-3 mb-6">
+        <button onClick={onBack} className="p-3 bg-slate-100 rounded-2xl text-slate-600 active:scale-90 transition-all shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </button>
         <h2 className="text-xl font-black text-slate-800 truncate flex-1">{name}</h2>
+        
+        {onReconcileHistory && (
+          <button 
+            onClick={onReconcileHistory}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2.5 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border border-indigo-200 shrink-0"
+            title="পুরোনো পুরো লেনদেনের হিস্টরি রিকনসাইল ও সমন্বয় করুন"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            <span className="hidden sm:inline">হিসাব সমন্বয়</span>
+          </button>
+        )}
+
         <button 
           onClick={() => {
             setEditCustomerName(name);
             setEditCustomerPhone(phone || '');
             setShowEditCustomerModal(true);
           }}
-          className="bg-amber-50 hover:bg-amber-100 text-amber-700 px-3.5 py-2.5 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border border-amber-200 shrink-0"
+          className="bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2.5 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border border-amber-200 shrink-0"
           title="কাস্টমারের নাম বা ফোন নম্বর এডিট করুন"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          নাম এডিট
+          <span className="hidden sm:inline">নাম এডিট</span>
         </button>
       </div>
 
@@ -340,15 +362,24 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
         <div className="relative z-10 select-none">
           {/* Main Stats Row */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-rose-300 mb-1">বর্তমানে পাওনা</p>
-              <p className="text-3xl font-black text-rose-400">€ {balance.toLocaleString()}</p>
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-300">বর্তমানে পাওনা</p>
+                {currentBalance <= 0 && (
+                  <span className="text-[8px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-400/30">
+                    পরিশোধিত ✅
+                  </span>
+                )}
+              </div>
+              <p className={`text-3xl font-black ${currentBalance <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                € {currentBalance.toLocaleString('it-IT')}
+              </p>
             </div>
             <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-1">সর্বশেষ জমা</p>
                 <p className="text-2xl font-black text-indigo-400">
-                  {lastPayment ? `€ ${lastPayment.amount.toLocaleString()}` : '€ 0'}
+                  {lastPayment ? `€ ${lastPayment.amount.toLocaleString('it-IT')}` : '€ 0'}
                 </p>
               </div>
               <p className="text-[10px] font-bold text-indigo-200">
@@ -361,17 +392,17 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
           <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4 mb-6 text-sm">
             <div className="pl-2">
               <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider mb-0.5">মোট বাকি দেওয়া হয়েছে</span>
-              <span className="text-md font-extrabold text-rose-300">€ {totalBaki.toLocaleString()}</span>
+              <span className="text-md font-extrabold text-rose-300">€ {totalBaki.toLocaleString('it-IT')}</span>
             </div>
             <div className="pl-2 border-l border-white/5">
               <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider mb-0.5">মোট জমা দেওয়া হয়েছে</span>
-              <span className="text-md font-extrabold text-emerald-300">€ {totalJoma.toLocaleString()}</span>
+              <span className="text-md font-extrabold text-emerald-300">€ {totalJoma.toLocaleString('it-IT')}</span>
             </div>
           </div>
           
           <div className="flex gap-2">
             <button 
-              onClick={() => openMessageModal(balance <= 0 ? 'thankyou' : 'reminder')}
+              onClick={() => openMessageModal(currentBalance <= 0 ? 'thankyou' : 'reminder')}
               className="flex-1 bg-indigo-500 hover:bg-indigo-600 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -455,21 +486,19 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
               historyTab === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            সব ({transactions.length})
+            সব ({customerTransactions.length})
           </button>
         </div>
       </div>
 
       <div className="space-y-3 pb-10">
-        {transactions
+        {customerTransactions
           .filter(t => {
             if (historyTab === 'due') {
-              const isBaki = t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI;
-              return isBaki && !isBakiSettled(t);
+              return isBakiTransaction(t) && !isBakiSettled(t);
             }
             if (historyTab === 'paid') {
-              const isPayment = t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
-              return isPayment || isBakiSettled(t);
+              return isPaymentTransaction(t) || isBakiSettled(t);
             }
             return true;
           }).length === 0 ? (
@@ -477,15 +506,13 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
               {historyTab === 'due' ? 'আলহামদুলিল্লাহ! কোনো বকেয়া বাকি নেই 🎉' : 'কোনো লেনদেন নেই'}
             </div>
           ) : (
-            transactions
+            customerTransactions
               .filter(t => {
                 if (historyTab === 'due') {
-                  const isBaki = t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI;
-                  return isBaki && !isBakiSettled(t);
+                  return isBakiTransaction(t) && !isBakiSettled(t);
                 }
                 if (historyTab === 'paid') {
-                  const isPayment = t.type === TransactionType.CASH_PAYMENT || t.type === TransactionType.BKASH_JOMA;
-                  return isPayment || isBakiSettled(t);
+                  return isPaymentTransaction(t) || isBakiSettled(t);
                 }
                 return true;
               })
@@ -1015,9 +1042,9 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
         </div>
 
         <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
-          <div style={{ flex: '1', border: '1px solid #fee2e2', borderRadius: '15px', padding: '15px', backgroundColor: '#fff1f2', textAlign: 'center' }}>
-            <p style={{ margin: '0 0 6px', fontSize: '11px', color: '#be123c', fontWeight: 'bold' }}>বর্তমানে পাওনা</p>
-            <p style={{ margin: '0', fontSize: '20px', fontWeight: '900', color: '#e11d48' }}>€ {balance.toLocaleString('it-IT')}</p>
+          <div style={{ flex: '1', border: '1px solid #fee2e2', borderRadius: '15px', padding: '15px', backgroundColor: currentBalance <= 0 ? '#f0fdf4' : '#fff1f2', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 6px', fontSize: '11px', color: currentBalance <= 0 ? '#166534' : '#be123c', fontWeight: 'bold' }}>বর্তমানে পাওনা</p>
+            <p style={{ margin: '0', fontSize: '20px', fontWeight: '900', color: currentBalance <= 0 ? '#10b981' : '#e11d48' }}>€ {currentBalance.toLocaleString('it-IT')}</p>
           </div>
           <div style={{ flex: '1', border: '1px solid #e0e7ff', borderRadius: '15px', padding: '15px', backgroundColor: '#eef2ff', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <p style={{ margin: '0 0 6px', fontSize: '11px', color: '#3730a3', fontWeight: 'bold' }}>সর্বশেষ জমা</p>
@@ -1042,26 +1069,37 @@ export const CustomerFolder: React.FC<CustomerFolderProps> = ({
           <thead>
             <tr style={{ backgroundColor: '#0f172a', color: 'white' }}>
               <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>তারিখ</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>বিবরণ</th>
+              <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>বিবরণ ও অবস্থা</th>
               <th style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>পরিমাণ</th>
             </tr>
           </thead>
           <tbody>
-            {transactions.map((t, idx) => (
-              <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
-                <td style={{ padding: '12px', fontSize: '13px' }}>{new Date(t.date).toLocaleDateString('it-IT')}</td>
-                <td style={{ padding: '12px', fontSize: '13px' }}>
-                   <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
-                    {t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? 'বাকি' : 'জমা'}
-                   </div>
-                   {t.note && <div style={{ fontSize: '11px', color: '#64748b' }}>{t.note}</div>}
-                </td>
-                <td style={{ padding: '12px', textAlign: 'right', fontWeight: '800', color: t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? '#e11d48' : '#10b981' }}>
-                  {t.type === TransactionType.BAKI || t.type === TransactionType.BKASH_BAKI ? '+ ' : '- '}
-                  € {t.amount.toLocaleString('it-IT')}
-                </td>
-              </tr>
-            ))}
+            {customerTransactions.map((t, idx) => {
+              const settled = isBakiSettled(t);
+              const isBaki = isBakiTransaction(t);
+              return (
+                <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
+                  <td style={{ padding: '12px', fontSize: '13px' }}>{new Date(t.date).toLocaleDateString('it-IT')}</td>
+                  <td style={{ padding: '12px', fontSize: '13px' }}>
+                     <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
+                      {isBaki ? 'বাকি' : 'জমা'}
+                      {isBaki && (
+                        settled 
+                          ? <span style={{ marginLeft: '6px', fontSize: '11px', color: '#16a34a', fontWeight: 'bold' }}>(পরিশোধিত ✅)</span>
+                          : t.status === 'partial'
+                            ? <span style={{ marginLeft: '6px', fontSize: '11px', color: '#d97706', fontWeight: 'bold' }}>(আংশিক জমা €{t.paidAmount}, বাকি €{Math.max(0, t.amount - (t.paidAmount || 0))})</span>
+                            : <span style={{ marginLeft: '6px', fontSize: '11px', color: '#dc2626', fontWeight: 'bold' }}>(বকেয়া ⏳)</span>
+                      )}
+                     </div>
+                     {t.note && <div style={{ fontSize: '11px', color: '#64748b' }}>{t.note}</div>}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: '800', color: isBaki ? (settled ? '#94a3b8' : '#e11d48') : '#10b981' }}>
+                    {isBaki ? '- ' : '+ '}
+                    € {t.amount.toLocaleString('it-IT')}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 

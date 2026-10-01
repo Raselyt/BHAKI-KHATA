@@ -22,6 +22,7 @@ export interface Transaction {
   status?: 'unpaid' | 'paid' | 'partial';
   paidAmount?: number;
   category?: string;
+  user_id?: string;
 }
 
 export interface HoldingTransaction {

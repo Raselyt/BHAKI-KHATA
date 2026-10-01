@@ -484,7 +484,7 @@ export const HoldingLedger: React.FC<HoldingLedgerProps> = ({ userId }) => {
 
     document.body.appendChild(element);
 
-    const opt = {
+    const opt: any = {
       margin: 10,
       filename: `amanat_receipt_${item.name}_${new Date(item.date).toLocaleDateString('it-IT').replace(/\//g, '-')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
